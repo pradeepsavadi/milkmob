@@ -535,116 +535,6 @@ class MilkMobClassifier:
         return nearby_mobs
     
     def get_all_mobs(self):
-    """
-    Get information about all defined mobs
-    
-    Returns:
-    list: Information about all mobs
-    """
-    try:
-        # Check if database file exists and has been initialized
-        if not os.path.exists(self.db_path):
-            logger.warning(f"Database file {self.db_path} does not exist. Initializing database.")
-            self._initialize_db()
-        
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            """
-            SELECT m.mob_id, m.name, m.description, m.video_count, m.cluster_id
-            FROM mobs m
-            ORDER BY m.video_count DESC
-            """
-        )
-        
-        rows = cursor.fetchall()
-        
-        mob_info = []
-        
-        for row in rows:
-            mob_id, name, description, video_count, cluster_id = row
-            
-            # Get keywords for this mob
-            cursor.execute(
-                """
-                SELECT keyword FROM mob_keywords 
-                WHERE mob_id = ? 
-                ORDER BY weight DESC LIMIT 5
-                """,
-                (mob_id,)
-            )
-            
-            keywords = [keyword[0] for keyword in cursor.fetchall()]
-            
-            # Get sample videos
-            cursor.execute(
-                """
-                SELECT video_id, title, location, match_score
-                FROM videos
-                WHERE mob_id = ?
-                ORDER BY match_score DESC
-                LIMIT 3
-                """,
-                (mob_id,)
-            )
-            
-            sample_videos = []
-            for video_row in cursor.fetchall():
-                video_id, title, location, match_score = video_row
-                sample_videos.append({
-                    "video_id": video_id,
-                    "title": title,
-                    "location": location,
-                    "match_score": match_score
-                })
-            
-            mob_info.append({
-                "mob_id": mob_id,
-                "name": name,
-                "description": description,
-                "video_count": video_count,
-                "cluster_id": cluster_id,
-                "sample_keywords": keywords,
-                "sample_videos": sample_videos
-            })
-        
-        conn.close()
-        
-        # If we got no results from the database, use static mobs as fallback
-        if not mob_info:
-            logger.info("No mobs found in database, using static mobs as fallback")
-            # Fallback to static mobs
-            for mob_id, data in self.mobs.items():
-                mob_info.append({
-                    "mob_id": mob_id,
-                    "name": data["name"],
-                    "description": data["description"],
-                    "sample_keywords": data["keywords"][:5],
-                    "video_count": 0,
-                    "sample_videos": []
-                })
-        
-        return mob_info
-        
-    except Exception as e:
-        logger.error(f"Error getting all mobs: {str(e)}")
-        
-        # Ensure we always return the static mobs even if database query fails
-        logger.info("Using static mobs as fallback due to error")
-        mob_info = []
-        
-        for mob_id, data in self.mobs.items():
-            mob_info.append({
-                "mob_id": mob_id,
-                "name": data["name"],
-                "description": data["description"],
-                "sample_keywords": data["keywords"][:5],
-                "video_count": 0,
-                "sample_videos": []
-            })
-        
-        return mob_info
         """
         Get information about all defined mobs
         
@@ -652,6 +542,11 @@ class MilkMobClassifier:
         list: Information about all mobs
         """
         try:
+            # Check if database file exists and has been initialized
+            if not os.path.exists(self.db_path):
+                logger.warning(f"Database file {self.db_path} does not exist. Initializing database.")
+                self._initialize_db()
+            
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
@@ -716,12 +611,27 @@ class MilkMobClassifier:
             
             conn.close()
             
+            # If we got no results from the database, use static mobs as fallback
+            if not mob_info:
+                logger.info("No mobs found in database, using static mobs as fallback")
+                # Fallback to static mobs
+                for mob_id, data in self.mobs.items():
+                    mob_info.append({
+                        "mob_id": mob_id,
+                        "name": data["name"],
+                        "description": data["description"],
+                        "sample_keywords": data["keywords"][:5],
+                        "video_count": 0,
+                        "sample_videos": []
+                    })
+            
             return mob_info
             
         except Exception as e:
             logger.error(f"Error getting all mobs: {str(e)}")
             
-            # Fallback to static mobs
+            # Ensure we always return the static mobs even if database query fails
+            logger.info("Using static mobs as fallback due to error")
             mob_info = []
             
             for mob_id, data in self.mobs.items():
