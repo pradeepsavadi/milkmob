@@ -12,8 +12,6 @@ Find similar videos within each mob
 
 ## High-Level Architecture
 
-
-MilkMob Analyzer
 ├── Backend Components
 │   ├── VideoAnalyzer - Core integration with Twelve Labs APIs
 │   ├── CampaignValidator - Validates videos meet campaign criteria
@@ -23,6 +21,10 @@ MilkMob Analyzer
 │   └── Streamlit UI - User interface with multiple tabs
 └── Utilities
     └── Database - SQLite for storing mob assignments and stats
+
+
+
+MilkMob Analyzer
 
 
 ## Setup and Installation
