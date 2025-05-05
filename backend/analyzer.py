@@ -124,72 +124,9 @@ class VideoAnalyzer:
             logger.error(f"Error in upload_and_analyze_video: {str(e)}")
             raise
     
-    def _perform_comprehensive_analysis(self, video_id):
-        """
-        Perform comprehensive analysis of the video
-        
-        Parameters:
-        video_id (str): The ID of the indexed video
-        
-        Returns:
-        dict: Comprehensive analysis results
-        """
-        try:
-            # For search and analysis, we'll use specific queries to extract information
-            analysis_results = {}
-            
-            # Search for milk-related objects
-            milk_results = self.client.search.query(
-                index_id=self.index_id,
-                query="milk OR milk bottle OR milk carton OR glass of milk",
-                video_ids=[video_id],
-                search_options={"type": "visual"}
-            )
-            
-            # Search for drinking activities
-            drinking_results = self.client.search.query(
-                index_id=self.index_id,
-                query="person drinking OR pouring milk OR creative activity with milk",
-                video_ids=[video_id],
-                search_options={"type": "visual"}
-            )
-            
-            # Extract objects and actions from search results
-            objects = self._extract_entities_from_results(milk_results, "objects")
-            actions = self._extract_entities_from_results(drinking_results, "actions")
-            
-            # Calculate confidence scores
-            confidence_scores = {
-                "has_milk": self._calculate_confidence(milk_results),
-                "is_drinking": self._calculate_confidence(drinking_results),
-                "is_creative": 0.75  # Default value, will be refined with generate results
-            }
-            
-            # Assemble the analysis results
-            analysis_results = {
-                "objects": objects if objects else ["person", "milk", "glass"],
-                "actions": actions if actions else ["drinking", "holding"],
-                "confidence_scores": confidence_scores
-            }
-            
-            return analysis_results
-            
-        except Exception as e:
-            logger.error(f"Error in comprehensive analysis: {str(e)}")
-            # Return default values if analysis fails
-            return {
-                "objects": ["person", "milk", "glass"],
-                "actions": ["drinking", "holding"],
-                "confidence_scores": {
-                    "has_milk": 0.7,
-                    "is_drinking": 0.7,
-                    "is_creative": 0.6
-                }
-            }
-    
     def _generate_summary(self, video_id):
         """
-        Generate summaries and highlights using Pegasus model
+        Generate summaries and highlights using Twelve Labs API
         
         Parameters:
         video_id (str): The ID of the indexed video
@@ -258,136 +195,113 @@ class VideoAnalyzer:
                 "conversations": ["Conversation about milk"],
                 "creativity_score": 0.5
             }
-    
-    def _extract_entities_from_results(self, results, entity_type):
+
+
+
+    def _perform_comprehensive_analysis(self, video_id):
         """
-        Extract entities (objects, actions) from search results
+        Perform comprehensive analysis of the video including visual and audio elements
+        using Twelve Labs API capabilities
         
         Parameters:
-        results: Search results from Twelve Labs
-        entity_type (str): Type of entity to extract ('objects' or 'actions')
+        video_id (str): The ID of the indexed video
         
         Returns:
-        list: Extracted entities
+        dict: Comprehensive analysis results
         """
-        entities = []
         try:
-            if hasattr(results, 'data'):
-                for result in results.data:
-                    # Check for relevant data in result segments
-                    for segment in result.segments:
-                        if hasattr(segment, 'metadata') and segment.metadata:
-                            if entity_type in segment.metadata:
-                                entities.extend(segment.metadata[entity_type])
+            # For search and analysis, we'll use specific queries to extract information
+            analysis_results = {}
             
-            # Remove duplicates
-            return list(set(entities))
-        except Exception as e:
-            logger.error(f"Error extracting {entity_type}: {str(e)}")
-            return []
-    
-    def _calculate_confidence(self, results):
-        """
-        Calculate confidence score from search results
-        
-        Parameters:
-        results: Search results from Twelve Labs
-        
-        Returns:
-        float: Confidence score
-        """
-        try:
-            if hasattr(results, 'data'):
-                scores = []
-                for result in results.data:
-                    if hasattr(result, 'score'):
-                        scores.append(result.score)
-                
-                if scores:
-                    return sum(scores) / len(scores)
-            
-            return 0.7  # Default confidence
-        except Exception as e:
-            logger.error(f"Error calculating confidence: {str(e)}")
-            return 0.7  # Default confidence
-    
-    def _get_video_details(self, video_id):
-        """
-        Get video details from Twelve Labs
-        
-        Parameters:
-        video_id (str): The ID of the video
-        
-        Returns:
-        dict: Video details
-        """
-        try:
-            # Retrieve video details
-            video = self.client.index.video.get(self.index_id, video_id)
-            
-            return {
-                "id": video.id,
-                "filename": video.filename,
-                "duration": video.duration,
-                "size": video.size,
-                "created": video.created
-            }
-        except Exception as e:
-            logger.error(f"Error getting video details: {str(e)}")
-            return {
-                "id": video_id,
-                "filename": "Unknown",
-                "duration": 0,
-                "size": 0,
-                "created": "Unknown"
-            }
-    
-    def find_similar_videos(self, video_id, limit=5):
-        """
-        Find videos similar to the given video
-        
-        Parameters:
-        video_id (str): The ID of the video to find similarities for
-        limit (int): Maximum number of similar videos to return
-        
-        Returns:
-        list: Similar videos information
-        """
-        try:
-            # Use the search API to find similar videos
-            results = self.client.search.query(
+            # Search for milk-related visual objects
+            milk_results_visual = self.client.search.query(
                 index_id=self.index_id,
+                query="milk OR milk bottle OR milk carton OR glass of milk",
                 video_ids=[video_id],
-                page_limit=limit,
-                search_options={"type": "similarity"}
+                options={"type": "visual"}  # Changed from search_options to options
             )
             
-            similar_videos = []
+            # Search for drinking activities
+            drinking_results = self.client.search.query(
+                index_id=self.index_id,
+                query="person drinking OR pouring milk OR creative activity with milk",
+                video_ids=[video_id],
+                options={"type": "visual"}  # Changed from search_options to options
+            )
             
-            if hasattr(results, 'data'):
-                for result in results.data:
-                    if result.video_id != video_id:  # Skip the query video itself
-                        similar_videos.append({
-                            "video_id": result.video_id,
-                            "title": result.filename if hasattr(result, 'filename') else "Similar Video",
-                            "similarity_score": result.score if hasattr(result, 'score') else 0.5
-                        })
+            # Search for milk-related audio content
+            milk_results_audio = self.client.search.query(
+                index_id=self.index_id,
+                query="milk OR got milk OR drinking milk OR cheers",
+                video_ids=[video_id],
+                options={"type": "audio"}  # Changed from search_options to options
+            )
             
-            # If no results or error, return dummy data
-            if not similar_videos:
-                similar_videos = self._get_dummy_similar_videos(limit)
-                
-            return similar_videos[:limit]
+            # Get video description using generate.describe API
+            description_results = self.client.generate.describe(
+                video_id=video_id
+            )
+            
+            description = description_results.data if hasattr(description_results, 'data') else ""
+            
+            # Get a semantic analysis using generate.text API
+            semantic_analysis = self.client.generate.text(
+                video_id=video_id,
+                prompt="Analyze this video and tell me if it shows someone drinking milk creatively. Describe what's happening in detail."
+            )
+            
+            semantic_text = semantic_analysis.data if hasattr(semantic_analysis, 'data') else ""
+            
+            # Extract objects and actions from search results
+            objects = self._extract_entities_from_results(milk_results_visual, "objects")
+            actions = self._extract_entities_from_results(drinking_results, "actions")
+            
+            # Extract audio mentions
+            audio_mentions = self._extract_audio_mentions(milk_results_audio)
+            
+            # Calculate visual confidence scores
+            visual_confidence = {
+                "has_milk": self._calculate_confidence(milk_results_visual),
+                "is_drinking": self._calculate_confidence(drinking_results),
+                "is_creative": self._assess_creativity(semantic_text)
+            }
+            
+            # Calculate audio confidence score
+            audio_confidence = self._calculate_confidence(milk_results_audio)
+            
+            # Get embedding vector for similarity search and clustering
+            embedding = self._get_video_embedding(video_id)
+            
+            # Assemble the analysis results
+            analysis_results = {
+                "video_id": video_id,
+                "objects": objects if objects else ["person", "milk", "glass"],
+                "actions": actions if actions else ["drinking", "holding"],
+                "audio_mentions": audio_mentions,
+                "description": description,
+                "semantic_analysis": semantic_text,
+                "visual_confidence": visual_confidence,
+                "audio_confidence": audio_confidence,
+                "embedding": embedding
+            }
+            
+            return analysis_results
+            
         except Exception as e:
-            logger.error(f"Error finding similar videos: {str(e)}")
-            return self._get_dummy_similar_videos(limit)
-    
-    def _get_dummy_similar_videos(self, limit=5):
-        """Generate dummy similar videos for demo purposes"""
-        return [
-            {
-                "video_id": f"sim_video_{i}",
-                "title": f"Similar Milk Video {i}",
-                "similarity_score": 0.9 - (i * 0.1)
-            } for i in range(1, limit + 1)
-        ]
+            logger.error(f"Error in comprehensive analysis: {str(e)}")
+            # Return default values if analysis fails
+            return {
+                "video_id": video_id,
+                "objects": ["person", "milk", "glass"],
+                "actions": ["drinking", "holding"],
+                "audio_mentions": [],
+                "description": "Video shows a person with milk.",
+                "semantic_analysis": "The video appears to show milk consumption.",
+                "visual_confidence": {
+                    "has_milk": 0.7,
+                    "is_drinking": 0.7,
+                    "is_creative": 0.6
+                },
+                "audio_confidence": 0.5,
+                "embedding": []
+            }
