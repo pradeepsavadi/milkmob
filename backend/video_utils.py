@@ -107,7 +107,7 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
     post_data (dict): Post data including caption, hashtags, location
     analyzer (VideoAnalyzer): Instance of VideoAnalyzer
     validator (CampaignValidator): Instance of CampaignValidator
-    classifier (EnhancedMilkMobClassifier): Instance of EnhancedMilkMobClassifier
+    classifier (MilkMobClassifier): Instance of MilkMobClassifier
     tag_detector (CampaignTagDetector): Instance of CampaignTagDetector
     
     Returns:
