@@ -134,12 +134,19 @@ with tab1:
                                 st.write(f"- {nearby_mob['name']} ({nearby_mob['video_count']} videos in {nearby_mob['location']})")
                     
                      # Display API responses
-                    if "api_responses" in results["validation"]:
+                    if ("api_responses" in results["validation"]) or results.get("caption") or results.get("storyboard"):
                         with st.expander("Twelve Labs API Analysis"):
-                            st.subheader("Milk Detection")
-                            st.write(results["validation"]["api_responses"]["milk_question"])
-                            st.subheader("Creativity Assessment")
-                            st.write(results["validation"]["api_responses"]["creativity_question"])                    
+                            if "api_responses" in results["validation"]:
+                                st.subheader("Milk Detection")
+                                st.write(results["validation"]["api_responses"]["milk_question"])
+                                st.subheader("Creativity Assessment")
+                                st.write(results["validation"]["api_responses"]["creativity_question"])
+                            if results.get("caption"):
+                                st.subheader("AI Caption")
+                                st.write(results["caption"])
+                            if results.get("storyboard"):
+                                st.subheader("Storyboard")
+                                st.image(results["storyboard"])
                     # Display analysis details in an expander
                     with st.expander("View Technical Details"):
                         st.json(results["validation"])
@@ -160,7 +167,22 @@ with tab1:
                     st.error("❌ Video validation failed")
                     st.write(results["validation"]["message"])
                     st.write("Please ensure your video shows someone drinking milk creatively!")
-                    
+
+                    # Display AI results even on failure
+                    if ("api_responses" in results["validation"]) or results.get("caption") or results.get("storyboard"):
+                        with st.expander("Twelve Labs API Analysis"):
+                            if "api_responses" in results["validation"]:
+                                st.subheader("Milk Detection")
+                                st.write(results["validation"]["api_responses"]["milk_question"])
+                                st.subheader("Creativity Assessment")
+                                st.write(results["validation"]["api_responses"]["creativity_question"])
+                            if results.get("caption"):
+                                st.subheader("AI Caption")
+                                st.write(results["caption"])
+                            if results.get("storyboard"):
+                                st.subheader("Storyboard")
+                                st.image(results["storyboard"])
+
                     # Display analysis details in an expander
                     with st.expander("View Validation Details"):
                         st.json(results["validation"])

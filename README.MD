@@ -156,6 +156,10 @@ The solution leverages several Twelve Labs API capabilities:
 - `generate.summarize`: For generating video summaries
 - `generate.text`: For creative assessment and semantic analysis
 - `search.vector`: For finding similar videos
+- `generate.caption` (optional): For producing a short caption of the video
+- `generate.storyboard` (optional): For retrieving representative storyboard frames
+
+When these optional endpoints are available, the Streamlit app displays the generated caption and storyboard images inside the **Twelve Labs API Analysis** section after a video is processed.
 
 
 

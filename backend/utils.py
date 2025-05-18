@@ -68,6 +68,12 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
         
         # Step 2: Analyze video with Twelve Labs
         analysis_results = analyzer.upload_and_analyze_video(video_path)
+
+        caption = None
+        storyboard = None
+        if analysis_results and "analysis_results" in analysis_results:
+            caption = analysis_results["analysis_results"].get("caption")
+            storyboard = analysis_results["analysis_results"].get("storyboard")
         
         # Ensure validator has access to analyzer for API calls
         validator.analyzer = analyzer
@@ -103,7 +109,9 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
             "mob_assignment": mob_assignment,
             "similar_videos": similar_videos,
             "location": location,
-            "processing_time": processing_time
+            "processing_time": processing_time,
+            "caption": caption,
+            "storyboard": storyboard
         }
         
     except Exception as e:
