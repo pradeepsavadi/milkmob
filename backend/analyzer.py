@@ -171,10 +171,36 @@ class VideoAnalyzer:
             for keyword in creative_keywords:
                 if keyword in creative_assessment.lower():
                     creativity_score += 0.05  # Increase score for each creative keyword found
-            
+
             # Cap score at 1.0
             creativity_score = min(creativity_score, 1.0)
-            
+
+            # Optional caption generation
+            caption = None
+            if hasattr(self.client.generate, "caption"):
+                try:
+                    caption_response = self.client.generate.caption(video_id=video_id)
+                    if hasattr(caption_response, "caption"):
+                        caption = caption_response.caption
+                    elif hasattr(caption_response, "data"):
+                        caption = caption_response.data
+                except Exception as e:
+                    logger.warning(f"Error generating caption: {str(e)}")
+
+            # Optional storyboard generation
+            storyboard = []
+            if hasattr(self.client.generate, "storyboard"):
+                try:
+                    storyboard_response = self.client.generate.storyboard(video_id=video_id)
+                    if hasattr(storyboard_response, "frames"):
+                        for frame in storyboard_response.frames:
+                            if hasattr(frame, "url"):
+                                storyboard.append(frame.url)
+                            else:
+                                storyboard.append(frame)
+                except Exception as e:
+                    logger.warning(f"Error generating storyboard: {str(e)}")
+
             # Update the confidence scores
             return {
                 "summary": summary,
@@ -182,7 +208,9 @@ class VideoAnalyzer:
                 "creative_assessment": creative_assessment,
                 "scenes": [summary],
                 "conversations": highlights[:2] if highlights else ["Conversation about milk"],
-                "creativity_score": creativity_score
+                "creativity_score": creativity_score,
+                "caption": caption,
+                "storyboard": storyboard
             }
             
         except Exception as e:
