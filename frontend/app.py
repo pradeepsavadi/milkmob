@@ -13,9 +13,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import backend components
 from backend.analyzer import VideoAnalyzer
 from backend.validator import CampaignValidator
-from backend.enhanced_classifier import EnhancedMilkMobClassifier  # Updated import
+from backend import MilkMobClassifier
 from backend.tag_detector import CampaignTagDetector
-from backend.video_utils import save_uploaded_video, process_video_post, extract_thumbnail  # Updated import
+from backend.video_utils import save_uploaded_video, process_video_post, extract_thumbnail
 
 # Import the enhanced explore tab
 from frontend.explore_tab import explore_milk_mobs  # Import the new tab function
@@ -50,7 +50,7 @@ def load_components():
     
     analyzer = VideoAnalyzer(api_key=api_key, index_id=index_id)
     validator = CampaignValidator()  # We'll set the analyzer during processing
-    classifier = EnhancedMilkMobClassifier()  # Using the enhanced classifier
+    classifier = MilkMobClassifier()  # Using the consolidated classifier
     tag_detector = CampaignTagDetector()
     
     return analyzer, validator, classifier, tag_detector

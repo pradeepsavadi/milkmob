@@ -5,8 +5,8 @@ import sqlite3
 import base64
 from pathlib import Path
 
-# Import the enhanced classifier
-from backend.enhanced_classifier import EnhancedMilkMobClassifier
+# Import the MilkMob classifier
+from backend import MilkMobClassifier
 
 def render_video_card(video, key_prefix):
     """Render a single video card"""
@@ -52,8 +52,8 @@ def explore_milk_mobs():
     st.title("🥛 Explore Milk Mobs")
     st.write("Learn about the different Milk Mobs you can join with your creative milk videos!")
     
-    # Initialize the enhanced classifier
-    classifier = EnhancedMilkMobClassifier()
+    # Initialize the classifier
+    classifier = MilkMobClassifier()
     
     # Get all mob data
     all_mobs = classifier.get_all_mobs()
