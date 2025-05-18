@@ -13,9 +13,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import backend components
 from backend.analyzer import VideoAnalyzer
 from backend.validator import CampaignValidator
-from backend.classifier import MilkMobClassifier
+from backend.enhanced_classifier import EnhancedMilkMobClassifier  # Updated import
 from backend.tag_detector import CampaignTagDetector
-from backend.utils import save_uploaded_video, process_video_post
+from backend.video_utils import save_uploaded_video, process_video_post, extract_thumbnail  # Updated import
+
+# Import the enhanced explore tab
+from frontend.explore_tab import explore_milk_mobs  # Import the new tab function
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -47,7 +50,7 @@ def load_components():
     
     analyzer = VideoAnalyzer(api_key=api_key, index_id=index_id)
     validator = CampaignValidator()  # We'll set the analyzer during processing
-    classifier = MilkMobClassifier()
+    classifier = EnhancedMilkMobClassifier()  # Using the enhanced classifier
     tag_detector = CampaignTagDetector()
     
     return analyzer, validator, classifier, tag_detector
@@ -57,7 +60,7 @@ analyzer, validator, classifier, tag_detector = load_components()
 # Create tabs for different app sections
 tab1, tab2, tab3 = st.tabs(["Upload & Validate", "Explore Milk Mobs", "Dashboard"])
 
-# Upload & Validate tab
+# Upload & Validate tab - mostly kept the same
 with tab1:
     st.subheader("Upload Your Video")
     st.write("Share your creative milk drinking video to join a Milk Mob!")
@@ -112,16 +115,42 @@ with tab1:
                 if results["validation"]["is_valid"]:
                     st.success("✅ Video validated successfully!")
                     
-                    # Show mob assignment
+                    # Show mob assignment with enhanced visuals
                     mob = results["mob_assignment"]
-                    st.subheader(f"You've joined the {mob['mob_name']}! 🎉")
-                    st.write(mob["mob_description"])
+                    
+                    # Use the color theme and icon from the mob
+                    color_theme = mob.get("color_theme", "#4CAF50")
+                    icon = mob.get("icon", "🥛")
+                    
+                    st.markdown(
+                        f"""
+                        <div style="background-color:{color_theme}15; padding:15px; 
+                            border-radius:10px; border-left:5px solid {color_theme};">
+                            <h2>{icon} You've joined the {mob['mob_name']}! 🎉</h2>
+                            <p>{mob['mob_description']}</p>
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
+                    
+                    # Show explanation if available
+                    if "explanation" in mob:
+                        st.info(mob["explanation"])
                     
                     # Show hashtag detection results
                     if results["tag_results"]["is_campaign_tagged"]:
                         st.success(f"Campaign hashtags detected: {', '.join(results['tag_results']['campaign_tags_found'])}")
                     else:
                         st.warning("No campaign hashtags detected. Consider adding tags like #gotmilk or #milkmob to your post!")
+                    
+                    # Display thumbnail and video
+                    if "thumbnail_path" in results and results["thumbnail_path"]:
+                        col1, col2 = st.columns([1, 3])
+                        with col1:
+                            st.image(results["thumbnail_path"], caption="Video Thumbnail")
+                        with col2:
+                            if os.path.exists(video_path):
+                                st.video(video_path)
                     
                     # Display location info if available
                     if "location" in results and results["location"]:
@@ -147,6 +176,7 @@ with tab1:
                             if results.get("storyboard"):
                                 st.subheader("Storyboard")
                                 st.image(results["storyboard"])
+                                
                     # Display analysis details in an expander
                     with st.expander("View Technical Details"):
                         st.json(results["validation"])
@@ -192,41 +222,11 @@ with tab1:
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
-# Explore Milk Mobs tab
+# Explore Milk Mobs tab - Using the new implementation
 with tab2:
-    st.subheader("Explore Milk Mobs")
-    st.write("Learn about the different Milk Mobs you can join with your creative milk videos!")
-    
-    # Get all mob information
-    all_mobs = classifier.get_all_mobs()
-    
-    # Display mobs in a grid
-    col1, col2 = st.columns(2)
-    
-    for i, mob in enumerate(all_mobs):
-        with col1 if i % 2 == 0 else col2:
-            with st.expander(f"🥛 {mob['name']} ({mob['video_count']} videos)"):
-                st.write(mob['description'])
-                
-                st.write("**Sample Keywords:**")
-                for keyword in mob['sample_keywords']:
-                    st.write(f"- {keyword}")
-                
-                # Show sample videos if available
-                if mob['sample_videos']:
-                    st.write("**Top Videos:**")
-                    for video in mob['sample_videos']:
-                        st.write(f"- {video['title']}")
-                        if video.get('location'):
-                            st.write(f"  📍 {video['location']}")
-                
-                # Add join button
-                if st.button(f"Join {mob['name']}", key=f"join_{mob['mob_id']}"):
-                    st.success(f"Upload your video to join {mob['name']}!")
-                    # This is just for demo - would actually switch tabs in a real app
-                    st.write("Go to the 'Upload & Validate' tab to upload your video.")
+    explore_milk_mobs()  # Call the function from explore_tab.py
 
-# Dashboard tab
+# Dashboard tab - Kept the same as original
 with tab3:
     st.subheader("Milk Mob Dashboard")
     st.write("Analytics and insights about the Got Milk campaign")
