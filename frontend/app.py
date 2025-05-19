@@ -196,7 +196,25 @@ with tab1:
                 else:
                     st.error("❌ Video validation failed")
                     st.write(results["validation"]["message"])
+
                     st.write("Please ensure your video shows someone drinking milk creatively!")
+
+                    if "is_cheese_making" in results["validation"] and results["validation"]["is_cheese_making"]:
+                        chef_mob = next((m for m in classifier.get_all_mobs() if m["mob_id"] == "chef_milk_mob"), None)
+                        if chef_mob:
+                            color_theme = chef_mob.get("color_theme", "#FF9800")
+                            icon = chef_mob.get("icon", "👨‍🍳")
+                            st.markdown(
+                                f"""
+                                <div style="background-color:{color_theme}15; padding:15px; 
+                                    border-radius:10px; border-left:5px solid {color_theme};">
+                                    <h3>{icon} Your video shows cheese-making!</h3>
+                                    <p>While this doesn't match the milk drinking criteria for the campaign, 
+                                    it would fit well in our Chef Milk Mob for culinary creations.</p>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
 
                     # Display AI results even on failure
                     if ("api_responses" in results["validation"]) or results.get("caption") or results.get("storyboard"):
