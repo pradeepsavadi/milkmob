@@ -56,6 +56,9 @@ Major backend modules include:
    TWELVE_LABS_API_KEY=your_api_key
    TWELVE_LABS_INDEX_ID=milk_campaign_index
    ```
+ 
+## Database Migration
+If you used a previous version of MilkMob, your `milk_mobs.db` may lack new columns. Run `python backend/migrate_db.py` to upgrade the schema or delete the old file to let the app recreate it.
 
 ## Running the App
 Start the Streamlit application from the project root:

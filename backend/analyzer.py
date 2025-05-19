@@ -521,11 +521,21 @@ class VideoAnalyzer:
         """
         try:
             # Use the vector search API to find similar videos
-            similar_results = self.client.search.vector(
-                index_id=self.index_id,
-                video_id=video_id,
-                limit=5  # Return top 5 similar videos
-            )
+            if hasattr(self.client.search, "vector"):
+                similar_results = self.client.search.vector(
+                    index_id=self.index_id,
+                    video_id=video_id,
+                    limit=5  # Return top 5 similar videos
+                )
+            elif hasattr(self.client.search, "similar"):
+                similar_results = self.client.search.similar(
+                    index_id=self.index_id,
+                    video_id=video_id,
+                    limit=5
+                )
+            else:
+                logger.warning("Vector search API not available")
+                return []
             
             similar_videos = []
             if hasattr(similar_results, 'data'):
