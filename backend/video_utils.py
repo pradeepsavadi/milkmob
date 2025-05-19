@@ -147,22 +147,18 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
             tag_results
         )
         
-        # Step 4: If valid, classify into a Milk Mob
-        mob_assignment = None
-        similar_videos = []
-        
-        if validation_result["is_valid"]:
-            # Pass enhanced metadata for storage
-            mob_assignment = classifier.classify_video(
-                analysis_results["analysis_results"], 
-                {
-                    "post_data": post_data,
-                    "thumbnail_path": thumbnail_path,
-                    "video_path": video_path
-                }
-            )
-            # Find similar videos in the same mob
-            similar_videos = analyzer.find_similar_videos(analysis_results["video_id"])
+        # Step 4: Always classify, even if not valid
+        mob_assignment = classifier.classify_video(
+            analysis_results["analysis_results"],
+            {
+                "post_data": post_data,
+                "thumbnail_path": thumbnail_path,
+                "video_path": video_path,
+                "validation": validation_result,
+            }
+        )
+
+        similar_videos = analyzer.find_similar_videos(analysis_results["video_id"])
         
         # Complete processing time
         processing_time = time.time() - start_time

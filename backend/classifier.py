@@ -197,12 +197,38 @@ class MilkMobClassifier:
         dict: Mob assignment information
         """
         logger.info("Classifying video with enhanced classifier")
-        
+
         try:
-            # Extract features from analysis results
             features = self._extract_features(analysis_results)
-            
-            # LLM analysis for enhanced classification
+            logger.info(f"Extracted features: {features}")
+
+            is_food_prep = False
+            is_cheese_making = False
+
+            if metadata and 'validation' in metadata:
+                validation = metadata['validation']
+                is_food_prep = validation.get('is_food_prep', False)
+                is_cheese_making = validation.get('is_cheese_making', False)
+                suggested_mob = validation.get('mob_suggestion')
+                if suggested_mob and suggested_mob in self.mobs:
+                    logger.info(f"Using suggested mob from validation: {suggested_mob}")
+                    best_mob = (suggested_mob, 0.8)
+                    mob_assignment = self._get_mob_data(best_mob[0])
+                    if mob_assignment:
+                        mob_assignment["match_score"] = best_mob[1]
+                        mob_assignment["explanation"] = "Your video shows features that match with cheese-making and culinary uses of milk."
+                        self._cache_assignment(
+                            analysis_results.get("video_id", "unknown_video"),
+                            mob_assignment,
+                            metadata,
+                        )
+                        return mob_assignment
+
+            if is_food_prep or is_cheese_making:
+                features.extend(["cooking", "food", "preparation", "recipe", "culinary"])
+            if is_cheese_making:
+                features.extend(["cheese", "dairy", "chef", "kitchen", "food"])
+
             llm_analysis = None
             if hasattr(self, 'openai_client'):
                 try:
@@ -210,8 +236,7 @@ class MilkMobClassifier:
                     logger.info(f"LLM analysis completed: {llm_analysis}")
                 except Exception as e:
                     logger.warning(f"LLM analysis failed: {str(e)}")
-            
-            # Calculate match score for each mob (traditional method)
+
             mob_scores = {}
             for mob_id, mob_data in self.mobs.items():
                 mob_scores[mob_id] = self._calculate_mob_match(features, mob_data)
@@ -230,6 +255,22 @@ class MilkMobClassifier:
             else:
                 # Fallback to traditional scoring
                 best_mob = max(mob_scores.items(), key=lambda x: x[1])
+
+            if best_mob[1] == 0:
+                if is_cheese_making:
+                    best_mob = ("chef_milk_mob", 0.7)
+                else:
+                    semantic_text = analysis_results.get("semantic_analysis", "").lower()
+                    if "cook" in semantic_text or "recipe" in semantic_text or "food" in semantic_text:
+                        best_mob = ("chef_milk_mob", 0.6)
+                    elif "art" in semantic_text or "creative" in semantic_text:
+                        best_mob = ("art_milk_mob", 0.6)
+                    elif "experiment" in semantic_text or "science" in semantic_text:
+                        best_mob = ("science_milk_mob", 0.6)
+                    elif "funny" in semantic_text or "laugh" in semantic_text:
+                        best_mob = ("comedy_milk_mob", 0.6)
+                    else:
+                        best_mob = ("active_milk_mob", 0.5)
             
             # Secondary mob (second highest score)
             remaining_mobs = {k: v for k, v in mob_scores.items() if k != best_mob[0]}
@@ -270,8 +311,12 @@ class MilkMobClassifier:
             if llm_analysis and 'explanation' in llm_analysis:
                 mob_assignment["explanation"] = llm_analysis['explanation']
             else:
-                # Generate basic explanation
-                mob_assignment["explanation"] = f"Your video shows features that match with the {mob_assignment['mob_name']} theme."
+                if is_cheese_making:
+                    mob_assignment["explanation"] = "Your video shows cheese-making, which is a creative culinary use of milk!"
+                elif is_food_prep:
+                    mob_assignment["explanation"] = "Your video shows food preparation with milk-based ingredients!"
+                else:
+                    mob_assignment["explanation"] = f"Your video shows features that match with the {mob_assignment['mob_name']} theme."
             
             # Add feature breakdown
             mob_assignment["feature_breakdown"] = self._get_feature_breakdown(features)
@@ -288,7 +333,7 @@ class MilkMobClassifier:
             # Cache the assignment with enhanced metadata
             video_id = analysis_results.get("video_id", "unknown_video")
             self._cache_assignment(
-                video_id, 
+                video_id,
                 mob_assignment,
                 metadata
             )
@@ -473,8 +518,19 @@ class MilkMobClassifier:
         metadata (dict): Additional video metadata
         """
         try:
+            conn = None
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='mobs'")
+            if not cursor.fetchone():
+                logger.error("Mobs table does not exist, cannot cache assignment")
+                return
+
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='videos'")
+            if not cursor.fetchone():
+                logger.error("Videos table does not exist, cannot cache assignment")
+                return
             
             # Extract locations and paths
             location_str = None
@@ -500,41 +556,64 @@ class MilkMobClassifier:
             if metadata and 'post_data' in metadata and 'caption' in metadata['post_data']:
                 description = metadata['post_data']['caption']
             
-            # Insert video assignment with enhanced metadata
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO videos 
-                (video_id, mob_id, title, description, thumbnail_path, video_path, location, match_score)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    video_id, 
-                    mob_assignment["mob_id"],
-                    title,
-                    description,
-                    thumbnail_path,
-                    video_path,
-                    location_str,
-                    mob_assignment["match_score"]
+            cursor.execute("PRAGMA table_info(videos)")
+            columns = [c[1] for c in cursor.fetchall()]
+
+            if {'description', 'thumbnail_path', 'video_path'} <= set(columns):
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO videos
+                    (video_id, mob_id, title, description, thumbnail_path, video_path, location, match_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        video_id,
+                        mob_assignment["mob_id"],
+                        title,
+                        description,
+                        thumbnail_path,
+                        video_path,
+                        location_str,
+                        mob_assignment["match_score"]
+                    )
                 )
-            )
+            else:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO videos
+                    (video_id, mob_id, title, location, match_score)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        video_id,
+                        mob_assignment["mob_id"],
+                        title,
+                        location_str,
+                        mob_assignment["match_score"]
+                    )
+                )
             
-            # Update mob video count
-            cursor.execute(
-                """
-                UPDATE mobs SET video_count = video_count + 1, 
-                last_updated = CURRENT_TIMESTAMP
-                WHERE mob_id = ?
-                """,
-                (mob_assignment["mob_id"],)
-            )
+            cursor.execute("PRAGMA table_info(mobs)")
+            mob_columns = [c[1] for c in cursor.fetchall()]
+            if {'video_count', 'last_updated'} <= set(mob_columns):
+                cursor.execute(
+                    """
+                    UPDATE mobs SET video_count = video_count + 1,
+                    last_updated = CURRENT_TIMESTAMP
+                    WHERE mob_id = ?
+                    """,
+                    (mob_assignment["mob_id"],)
+                )
             
             conn.commit()
-            conn.close()
-            logger.info(f"Video {video_id} assigned to {mob_assignment['mob_id']}")
-            
         except Exception as e:
+            if conn:
+                conn.rollback()
             logger.error(f"Error caching assignment: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
+            logger.info(f"Video {video_id} assigned to {mob_assignment['mob_id']}")
     
     def get_all_mobs(self):
         """

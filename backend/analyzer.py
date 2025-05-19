@@ -225,115 +225,77 @@ class VideoAnalyzer:
             }
 
     def _perform_comprehensive_analysis(self, video_id):
-        """
-        Perform comprehensive analysis of the video including visual and audio elements
-        using Twelve Labs API capabilities
-        
-        Parameters:
-        video_id (str): The ID of the indexed video
-        
-        Returns:
-        dict: Comprehensive analysis results
-        """
+        """Perform comprehensive analysis using current Twelve Labs API"""
         try:
-            # For search and analysis, we'll use specific queries to extract information
             analysis_results = {}
-            
-            # Search for milk-related visual objects
+
             try:
                 milk_results_visual = self.client.search.query(
                     index_id=self.index_id,
-                    query="milk OR milk bottle OR milk carton OR glass of milk",
-                    video_ids=[video_id],
-                    options={"type": "visual"}
-                )
-            except Exception as e:
-                logger.warning(f"Error with visual search API, trying fallback: {str(e)}")
-                # Fallback to a simpler call if options format has changed
-                milk_results_visual = self.client.search.query(
-                    index_id=self.index_id,
-                    query="milk OR milk bottle OR milk carton OR glass of milk",
+                    query="milk OR milk bottle OR milk carton OR glass of milk OR cheese OR dairy",
                     video_ids=[video_id]
                 )
-            
-            # Search for drinking activities
+            except Exception as e:
+                logger.warning(f"Error with visual search API: {str(e)}")
+                milk_results_visual = []
+
             try:
                 drinking_results = self.client.search.query(
                     index_id=self.index_id,
-                    query="person drinking OR pouring milk OR creative activity with milk",
-                    video_ids=[video_id],
-                    options={"type": "visual"}
-                )
-            except Exception as e:
-                logger.warning(f"Error with visual search API, trying fallback: {str(e)}")
-                drinking_results = self.client.search.query(
-                    index_id=self.index_id,
-                    query="person drinking OR pouring milk OR creative activity with milk",
+                    query="person drinking OR pouring milk OR creative activity with milk OR cheese making",
                     video_ids=[video_id]
                 )
-            
-            # Search for milk-related audio content
+            except Exception as e:
+                logger.warning(f"Error with visual search API: {str(e)}")
+                drinking_results = []
+
             try:
                 milk_results_audio = self.client.search.query(
                     index_id=self.index_id,
-                    query="milk OR got milk OR drinking milk OR cheers",
-                    video_ids=[video_id],
-                    options={"type": "audio"}
-                )
-            except Exception as e:
-                logger.warning(f"Error with audio search API, trying fallback: {str(e)}")
-                milk_results_audio = self.client.search.query(
-                    index_id=self.index_id,
-                    query="milk OR got milk OR drinking milk OR cheers",
+                    query="milk OR got milk OR drinking milk OR cheese OR dairy",
                     video_ids=[video_id]
                 )
-            
-            # Get video description using generate.describe API
+            except Exception as e:
+                logger.warning(f"Error with audio search API: {str(e)}")
+                milk_results_audio = []
+
             try:
-                description_results = self.client.generate.describe(
-                    video_id=video_id
+                description_results = self.client.generate.text(
+                    video_id=video_id,
+                    prompt="Describe what is happening in this video in detail."
                 )
                 description = description_results.data if hasattr(description_results, 'data') else ""
             except Exception as e:
                 logger.warning(f"Error with describe API: {str(e)}")
-                description = "Video shows activity with milk."
-            
-            # Get a semantic analysis using generate.text API
+                description = "Video shows activity with milk or dairy products."
+
             try:
                 semantic_analysis = self.client.generate.text(
                     video_id=video_id,
-                    prompt="Analyze this video and tell me if it shows someone drinking milk creatively. Describe what's happening in detail."
+                    prompt="Analyze this video and tell me if it shows someone drinking milk or making food with milk. Describe what's happening in detail."
                 )
                 semantic_text = semantic_analysis.data if hasattr(semantic_analysis, 'data') else ""
             except Exception as e:
                 logger.warning(f"Error with text generation API: {str(e)}")
-                semantic_text = "The video appears to show milk consumption."
-            
-            # Extract objects and actions from search results
+                semantic_text = "The video appears to show dairy-related activity."
+
             objects = self._extract_entities_from_results(milk_results_visual, "objects")
             actions = self._extract_entities_from_results(drinking_results, "actions")
-            
-            # Extract audio mentions
             audio_mentions = self._extract_audio_mentions(milk_results_audio)
-            
-            # Calculate visual confidence scores
+
             visual_confidence = {
                 "has_milk": self._calculate_confidence(milk_results_visual),
                 "is_drinking": self._calculate_confidence(drinking_results),
                 "is_creative": self._assess_creativity(semantic_text)
             }
-            
-            # Calculate audio confidence score
+
             audio_confidence = self._calculate_confidence(milk_results_audio)
-            
-            # Get embedding vector for similarity search and clustering
             embedding = self._get_video_embedding(video_id)
-            
-            # Assemble the analysis results
+
             analysis_results = {
                 "video_id": video_id,
                 "objects": objects if objects else ["person", "milk", "glass"],
-                "actions": actions if actions else ["drinking", "holding"],
+                "actions": actions if actions else ["handling", "preparing"],
                 "audio_mentions": audio_mentions,
                 "description": description,
                 "semantic_analysis": semantic_text,
@@ -341,22 +303,21 @@ class VideoAnalyzer:
                 "audio_confidence": audio_confidence,
                 "embedding": embedding
             }
-            
+
             return analysis_results
             
         except Exception as e:
             logger.error(f"Error in comprehensive analysis: {str(e)}")
-            # Return default values if analysis fails
             return {
                 "video_id": video_id,
-                "objects": ["person", "milk", "glass"],
-                "actions": ["drinking", "holding"],
+                "objects": ["dairy", "food", "cooking"],
+                "actions": ["preparing", "cooking"],
                 "audio_mentions": [],
-                "description": "Video shows a person with milk.",
-                "semantic_analysis": "The video appears to show milk consumption.",
+                "description": "Video shows dairy food preparation.",
+                "semantic_analysis": "The video appears to show dairy food preparation.",
                 "visual_confidence": {
                     "has_milk": 0.7,
-                    "is_drinking": 0.7,
+                    "is_drinking": 0.3,
                     "is_creative": 0.6
                 },
                 "audio_confidence": 0.5,
@@ -364,15 +325,17 @@ class VideoAnalyzer:
             }
             
     def _get_video_details(self, video_id):
-        """Get video details from Twelve Labs API"""
+        """Get video details from Twelve Labs API with updated method"""
         try:
-            # Get video details
-            video = self.client.video.get(video_id=video_id)
-            return {
-                "id": video.id,
-                "name": video.name if hasattr(video, 'name') else "Untitled",
-                "duration": video.duration if hasattr(video, 'duration') else 0
-            }
+            videos = self.client.index.list_videos(index_id=self.index_id)
+            for video in videos:
+                if video.id == video_id:
+                    return {
+                        "id": video.id,
+                        "name": video.name if hasattr(video, 'name') else "Untitled",
+                        "duration": video.duration if hasattr(video, 'duration') else 0,
+                    }
+            return {"id": video_id, "name": "Untitled", "duration": 0}
         except Exception as e:
             logger.error(f"Error getting video details: {str(e)}")
             return {"id": video_id, "name": "Untitled", "duration": 0}
@@ -380,15 +343,19 @@ class VideoAnalyzer:
     def _get_video_embedding(self, video_id):
         """Get video embedding vector for similarity search"""
         try:
-            # Use the embedding API to get the vector representation
-            embedding_response = self.client.search.get_vectors(
-                index_id=self.index_id,
-                video_ids=[video_id]
-            )
-            
-            # Extract the embedding vector if available
-            if hasattr(embedding_response, 'data') and embedding_response.data:
-                return embedding_response.data[0].vector
+            if hasattr(self.client.search, 'get_vectors'):
+                embedding_response = self.client.search.get_vectors(
+                    index_id=self.index_id,
+                    video_ids=[video_id]
+                )
+                if hasattr(embedding_response, 'data') and embedding_response.data:
+                    return embedding_response.data[0].vector
+
+            try:
+                pass
+            except Exception as e:
+                logger.warning(f"Could not get embedding using alternate method: {str(e)}")
+
             return []
         except Exception as e:
             logger.error(f"Error getting video embedding: {str(e)}")
@@ -510,46 +477,35 @@ class VideoAnalyzer:
             return 0.5
 
     def find_similar_videos(self, video_id):
-        """
-        Find similar videos using embedding similarity
-        
-        Parameters:
-        video_id (str): The ID of the video to find similar videos for
-        
-        Returns:
-        list: Similar videos with similarity scores
-        """
+        """Find similar videos using updated API methods"""
         try:
-            # Use the vector search API to find similar videos
-            if hasattr(self.client.search, "vector"):
-                similar_results = self.client.search.vector(
-                    index_id=self.index_id,
-                    video_id=video_id,
-                    limit=5  # Return top 5 similar videos
-                )
-            elif hasattr(self.client.search, "similar"):
-                similar_results = self.client.search.similar(
+            try:
+                similar_results = self.client.search.semantic(
                     index_id=self.index_id,
                     video_id=video_id,
                     limit=5
                 )
-            else:
-                logger.warning("Vector search API not available")
-                return []
-            
+            except Exception as e:
+                logger.warning(f"Error with semantic search, trying fallback: {str(e)}")
+                similar_results = self.client.search.query(
+                    index_id=self.index_id,
+                    query="milk OR dairy",
+                    video_ids=[],
+                    limit=5
+                )
+
             similar_videos = []
             if hasattr(similar_results, 'data'):
                 for result in similar_results.data:
                     if hasattr(result, 'video_id') and result.video_id != video_id:
-                        # Get video details
                         video_details = self._get_video_details(result.video_id)
-                        
+
                         similar_videos.append({
                             "video_id": result.video_id,
                             "title": video_details.get("name", f"Video {result.video_id[:8]}"),
                             "similarity_score": result.score if hasattr(result, 'score') else 0.5
                         })
-            
+
             return similar_videos
         except Exception as e:
             logger.error(f"Error finding similar videos: {str(e)}")

@@ -26,9 +26,101 @@ class CampaignValidator:
         ]
         
         self.creativity_terms = [
-            "creative", "unique", "interesting", "unusual", "artistic", 
+            "creative", "unique", "interesting", "unusual", "artistic",
             "dance", "jump", "flip", "trick", "stunt"
         ]
+
+    def _detect_presence_in_text(self, text, subject):
+        """Better detection of subject presence in text with negation handling"""
+        if not text:
+            return False
+
+        text_lower = text.lower()
+        negative_phrases = [
+            "does not show " + subject,
+            "doesn't show " + subject,
+            "no " + subject,
+            "not showing " + subject,
+            "doesn't contain " + subject,
+            "does not contain " + subject,
+            "isn't " + subject,
+            "is not " + subject,
+            "not being consumed",
+            "not consumed",
+        ]
+        if any(phrase in text_lower for phrase in negative_phrases):
+            return False
+
+        positive_phrases = [
+            "shows " + subject,
+            "contains " + subject,
+            "has " + subject,
+            "using " + subject,
+            "with " + subject,
+            subject + " is present",
+            subject + " is shown",
+            "dairy",
+            "cheese",
+        ]
+
+        return any(phrase in text_lower for phrase in positive_phrases)
+
+    def _detect_drinking_in_text(self, text):
+        """Detect drinking activity in text with better accuracy"""
+        if not text:
+            return False
+
+        text_lower = text.lower()
+        negative_phrases = [
+            "not drinking",
+            "doesn't show drinking",
+            "does not show drinking",
+            "no drinking",
+            "no one drinking",
+            "no one is drinking",
+            "not consumed",
+            "not being consumed",
+            "does not depict",
+            "doesn't depict",
+        ]
+        if any(phrase in text_lower for phrase in negative_phrases):
+            return False
+
+        drinking_phrases = [
+            "drinking",
+            "sipping",
+            "gulping",
+            "consuming milk",
+            "consuming the milk",
+            "drinks milk",
+            "drinking milk",
+            "milk consumption",
+        ]
+        return any(phrase in text_lower for phrase in drinking_phrases)
+
+    def _detect_food_preparation(self, text):
+        """Detect food preparation activities in text"""
+        if not text:
+            return False
+
+        text_lower = text.lower()
+        food_prep_phrases = [
+            "making",
+            "cooking",
+            "preparing",
+            "recipe",
+            "cheese",
+            "cheese-making",
+            "cheese making",
+            "separation",
+            "separating",
+            "curds",
+            "whey",
+            "culinary",
+            "food preparation",
+            "kitchen",
+        ]
+        return any(phrase in text_lower for phrase in food_prep_phrases)
     
     def validate_video(self, analysis_results, tag_results=None):
         """
@@ -42,103 +134,82 @@ class CampaignValidator:
         dict: Validation results
         """
         logger.info("Validating video against campaign criteria")
-        
+
         try:
             video_id = analysis_results.get("video_id", None)
-            
-            # Instead of using generate.question which doesn't exist,
-            # use generate.text with specific questions
+
             if self.analyzer and video_id:
-                # Use the Twelve Labs generate.text API to directly ask about milk content
                 milk_question_prompt = "Does this video show milk or someone drinking milk? Explain how certain you are."
                 milk_text = self.analyzer.client.generate.text(
                     video_id=video_id,
                     prompt=milk_question_prompt
                 )
-                
-                # Use the API to assess creativity
+
                 creativity_question_prompt = "Is this video showing a creative or unique way of drinking milk? Rate creativity on a scale of 1-10."
                 creativity_text = self.analyzer.client.generate.text(
                     video_id=video_id,
                     prompt=creativity_question_prompt
                 )
-                
-                # Analyze the responses
+
                 milk_response = milk_text.data if hasattr(milk_text, 'data') else ""
                 creativity_response = creativity_text.data if hasattr(creativity_text, 'data') else ""
-                
-                # Extract confidence levels from API responses
-                milk_confidence = self._extract_confidence_from_text(milk_response, "milk")
+
+                has_milk = self._detect_presence_in_text(milk_response, "milk")
+                is_drinking = self._detect_drinking_in_text(milk_response)
+                is_food_prep = self._detect_food_preparation(milk_response) or self._detect_food_preparation(creativity_response)
+                is_cheese_making = "cheese" in milk_response.lower() or "cheese-making" in milk_response.lower() or "cheese making" in milk_response.lower()
+
+                milk_confidence = self._extract_confidence_from_text(milk_response, "milk") if has_milk else 0.3
                 creativity_confidence = self._extract_creativity_score(creativity_response) / 10.0
-                
-                # Get direct visual and audio confidence scores
-                visual_confidence = analysis_results.get("visual_confidence", {})
-                milk_visual_confidence = visual_confidence.get("has_milk", 0.0)
-                drinking_confidence = visual_confidence.get("is_drinking", 0.0)
-                audio_confidence = analysis_results.get("audio_confidence", 0.0)
-                
-                # Check for milk-related objects using terms
-                has_milk_by_terms = self._contains_terms(
-                    analysis_results.get("objects", []),
-                    self.milk_terms
-                )
-                
-                # Check for drinking activities using terms
-                is_drinking_by_terms = self._contains_terms(
-                    analysis_results.get("actions", []),
-                    self.drinking_terms
-                )
-                
-                # Use the highest confidence values from all methods
-                final_milk_confidence = max(milk_confidence, milk_visual_confidence)
-                
-                # Final validation decision
-                has_milk = (final_milk_confidence >= 0.6) or has_milk_by_terms
-                is_drinking = (drinking_confidence >= 0.6) or is_drinking_by_terms
-                is_creative = creativity_confidence >= 0.5
-                has_audio_mention = audio_confidence >= 0.6
-                
-                # Tag boost
+
                 tag_boost = 0.0
                 if tag_results and tag_results.get("is_campaign_tagged", False):
                     tag_boost = min(0.2, tag_results.get("confidence_score", 0.0))
-                    final_milk_confidence = min(1.0, final_milk_confidence + tag_boost)
-                    
-                # Overall validation result - must have milk and drinking activity
-                is_valid = has_milk and is_drinking
-                
-                # Overall confidence score
-                overall_confidence = (final_milk_confidence + drinking_confidence) / 2.0
-                
-                # Generate validation results
+                    milk_confidence = min(1.0, milk_confidence + tag_boost)
+
+                is_valid = has_milk and is_drinking and not is_cheese_making
+
                 validation_result = {
                     "is_valid": is_valid,
                     "has_milk": has_milk,
                     "is_drinking": is_drinking,
-                    "is_creative": is_creative,
-                    "has_audio_mention": has_audio_mention,
-                    "milk_confidence": final_milk_confidence,
-                    "drinking_confidence": drinking_confidence,
+                    "is_cheese_making": is_cheese_making,
+                    "is_food_prep": is_food_prep,
+                    "is_creative": creativity_confidence >= 0.5,
+                    "milk_confidence": milk_confidence,
+                    "drinking_confidence": 0.7 if is_drinking else 0.3,
                     "creativity_confidence": creativity_confidence,
-                    "audio_confidence": audio_confidence,
-                    "tag_boost": tag_boost,
-                    "overall_confidence": overall_confidence,
-                    "message": self._generate_validation_message(
-                        is_valid, has_milk, is_drinking, is_creative, has_audio_mention, tag_results
-                    ),
+                    "audio_confidence": analysis_results.get("audio_confidence", 0.0),
+                    "overall_confidence": (milk_confidence + (0.7 if is_drinking else 0.3)) / 2.0,
+                    "message": None,
+                    "mob_suggestion": None,
                     "api_responses": {
                         "milk_question": milk_response,
-                        "creativity_question": creativity_response
-                    }
+                        "creativity_question": creativity_response,
+                    },
                 }
-                
+
+                if is_cheese_making or is_food_prep:
+                    validation_result["message"] = "Your video shows cheese-making or food preparation, which is a creative use of milk, but it doesn't show milk drinking as required for the campaign."
+                    validation_result["mob_suggestion"] = "chef_milk_mob"
+                else:
+                    validation_result["message"] = self._generate_validation_message(
+                        is_valid,
+                        has_milk,
+                        is_drinking,
+                        creativity_confidence >= 0.5,
+                        False,
+                        tag_results,
+                    )
+                    if is_valid:
+                        validation_result["mob_suggestion"] = "active_milk_mob"
+
                 logger.info(f"Validation result: {validation_result['is_valid']}")
                 return validation_result
-            
+
             else:
-                # Fallback to basic analysis if generate API isn't available
                 return self._basic_validation(analysis_results, tag_results)
-                
+
         except Exception as e:
             logger.error(f"Error validating video: {str(e)}")
             return {
