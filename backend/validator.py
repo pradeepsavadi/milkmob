@@ -428,10 +428,7 @@ class CampaignValidator:
                 tag_message = " Don't forget to include campaign hashtags like #gotmilk or #milkmob!"
         
         if is_valid:
-            if is_creative:
-                return f"Great job! Your video shows someone creatively drinking milk!{tag_message} You're now ready to join a Milk Mob."
-            else:
-                return f"Good job! Your video shows milk drinking.{tag_message} To make it even better, try adding more creative elements."
+            return f"Great job! Your video shows someone drinking milk!{tag_message} You're now ready to join a Milk Mob."
         elif not has_milk:
             return f"We couldn't detect milk in your video. Make sure milk is clearly visible.{tag_message}"
         elif not is_drinking:

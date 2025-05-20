@@ -72,6 +72,8 @@ def migrate(db_path="milk_mobs.db"):
             add_column(cursor, "videos", "video_path TEXT")
         if not column_exists(cursor, "videos", "embedding"):
             add_column(cursor, "videos", "embedding TEXT")
+        if not column_exists(cursor, "videos", "creativity_score"):
+            add_column(cursor, "videos", "creativity_score REAL")
 
         conn.commit()
         logger.info("Database migration completed")

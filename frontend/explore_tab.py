@@ -41,6 +41,9 @@ def render_video_card(video, key_prefix):
         # Display match score
         score = video.get('match_score', 0.5)
         st.progress(score, text=f"Match: {score:.0%}")
+        if 'creativity_score' in video:
+            cscore = video.get('creativity_score', 0.0)
+            st.progress(cscore, text=f"Creativity: {cscore:.0%}")
         
         # Video player button
         if video.get('video_path') and os.path.exists(video['video_path']):
@@ -58,6 +61,11 @@ def explore_milk_mobs():
     # Get all mob data
     all_mobs = classifier.get_all_mobs()
 
+    # Slider to choose how many creative videos to show per mob
+    creative_limit = st.slider(
+        "Number of top creative videos to show", min_value=1, max_value=10, value=3
+    )
+
     # Enrich mobs with keywords and sample videos
     for mob in all_mobs:
         try:
@@ -65,7 +73,9 @@ def explore_milk_mobs():
         except Exception:
             mob['sample_keywords'] = []
         try:
-            mob['sample_videos'] = classifier.get_mob_videos(mob['mob_id'], limit=3)
+            mob['sample_videos'] = classifier.get_mob_videos(
+                mob['mob_id'], limit=creative_limit, sort_by_creativity=True
+            )
         except Exception:
             mob['sample_videos'] = []
     
