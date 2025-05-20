@@ -2,10 +2,7 @@ import logging
 import os
 import json
 import httpx
-<<<<<<< HEAD
 from typing import Optional, Dict, Any
-=======
->>>>>>> main
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,68 +46,6 @@ class CampaignValidator:
             "dance", "jump", "flip", "trick", "stunt"
         ]
 
-<<<<<<< HEAD
-    def _analyze_campaign_prompt(self, analysis: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        """Use GPT-4 to determine campaign relevance and mob suggestions."""
-        if not self._openai_client:
-            return None
-
-        meta_lines = []
-        if metadata:
-            caption = metadata.get("caption", "")
-            hashtags = metadata.get("hashtags", [])
-            if isinstance(hashtags, list):
-                hashtags = " ".join(hashtags)
-            meta_lines.append(f"caption: {caption}")
-            if hashtags:
-                meta_lines.append(f"hashtags: {hashtags}")
-            if metadata.get("location"):
-                meta_lines.append(f"location: {metadata['location']}")
-            if metadata.get("user_id"):
-                meta_lines.append(f"user: {metadata['user_id']}")
-        video_data = analysis.get("video_data", {})
-        if video_data:
-            if video_data.get("name"):
-                meta_lines.append(f"title: {video_data['name']}")
-            if video_data.get("duration") is not None:
-                meta_lines.append(f"duration: {video_data['duration']}")
-
-        video_metadata = "\n".join(meta_lines)
-
-        summary = analysis.get("summary") or analysis.get("description", "")
-        actions = ", ".join(analysis.get("actions", []))
-        objects = ", ".join(analysis.get("objects", []))
-        location = metadata.get("location") if metadata else None
-
-        prompt = (
-            "You are an AI assistant for a social media platform's viral marketing campaign called \"Got Milk Mob.\"\n"
-            "Your task is to analyze video content and categorize it into appropriate \"Milk Mobs\" based on the following information extracted by Twelve Labs:\n"
-            f"VIDEO METADATA:\n{video_metadata}\n"
-            f"VIDEO CONTENT SUMMARY:\n{summary}\n"
-            f"KEY ACTIONS DETECTED:\n{actions}\n"
-            f"OBJECTS IDENTIFIED:\n{objects}\n"
-            f"SETTING/LOCATION:\n{location if location else 'Unknown'}\n"
-            "INSTRUCTIONS:\n"
-            "1. Verify this video is genuinely part of the \"Got Milk\" campaign by confirming:\n"
-            "   - Presence of milk consumption or milk container\n"
-            "   - Person performing a creative/unique activity while drinking milk\n"
-            "   - Overall alignment with campaign theme\n"
-            "2. If validated, categorize this video into one of the following \"Milk Mobs\" or suggest a new one:\n"
-            "   - Sports Milk Mob (athletic activities)\n"
-            "   - Dance Milk Mob (dancing/movement-based activities)\n"
-            "   - Stunt Milk Mob (impressive tricks/stunts)\n"
-            "   - Comedy Milk Mob (funny/humorous content)\n"
-            "   - Challenge Milk Mob (completing specific challenges)\n"
-            "3. Provide a brief rationale (2-3 sentences) for your categorization.\n"
-            "4. Generate 3-5 relevant hashtags that could be suggested to the user beyond #gotmilk and #milkmob.\n"
-            "5. Identify 2-3 distinctive elements that could connect this video with others in the same \"Milk Mob.\"\n"
-            "OUTPUT FORMAT:\n"
-            "- Campaign Validation: [Yes/No]\n"
-            "- Recommended Milk Mob: [Category]\n"
-            "- Rationale: [Brief explanation]\n"
-            "- Suggested Additional Hashtags: [List]\n"
-            "- Connection Points: [List]"
-=======
     def _analyze_campaign_prompt(self, analysis: dict, metadata: dict | None):
         """Use OpenAI with a detailed campaign prompt to analyze the video."""
         if not self._openai_client:
@@ -163,23 +98,15 @@ class CampaignValidator:
             '4. Generate 3-5 relevant hashtags that could be suggested to the user beyond #gotmilk and #milkmob.\n'
             '5. Identify 2-3 distinctive elements that could connect this video with others in the same "Milk Mob."\n\n'
             'Respond in JSON with keys campaign_validation, recommended_mob, rationale, hashtags, connection_points.'
->>>>>>> main
         )
 
         try:
             resp = self._openai_client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-<<<<<<< HEAD
-                temperature=0.2,
-            )
-            content = resp.choices[0].message.content
-            return json.loads(content)
-=======
                 temperature=0.3,
             )
             return json.loads(resp.choices[0].message.content)
->>>>>>> main
         except Exception as e:  # pragma: no cover - network not available
             logger.warning("OpenAI campaign prompt failed: %s", e)
             return None
@@ -302,12 +229,12 @@ class CampaignValidator:
         ]
         return any(phrase in text_lower for phrase in food_prep_phrases)
     
-<<<<<<< HEAD
-    def validate_video(self, analysis_results: Dict[str, Any], tag_results: Optional[Dict[str, Any]] = None,
-                       metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-=======
-    def validate_video(self, analysis_results, tag_results=None, metadata=None):
->>>>>>> main
+    def validate_video(
+        self,
+        analysis_results: Dict[str, Any],
+        tag_results: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         Validate if video meets campaign criteria using Twelve Labs API capabilities
         
@@ -340,10 +267,7 @@ class CampaignValidator:
                 creativity_response = creativity_text.data if hasattr(creativity_text, 'data') else ""
 
                 llm_result = self._analyze_with_llm(milk_response, creativity_response)
-<<<<<<< HEAD
-=======
                 campaign_result = self._analyze_campaign_prompt(analysis_results, metadata)
->>>>>>> main
                 if llm_result:
                     has_milk = llm_result.get("has_milk", False)
                     is_drinking = llm_result.get("is_drinking", False)
@@ -386,20 +310,18 @@ class CampaignValidator:
                     },
                 }
 
-<<<<<<< HEAD
-                campaign_prompt = self._analyze_campaign_prompt(analysis_results, metadata)
-                if campaign_prompt:
-                    validation_result["campaign_prompt"] = campaign_prompt
-                    if not validation_result.get("mob_suggestion") and campaign_prompt.get("Recommended Milk Mob"):
-                        validation_result["mob_suggestion"] = campaign_prompt.get("Recommended Milk Mob")
-=======
                 if campaign_result:
                     validation_result["is_valid"] = str(campaign_result.get("campaign_validation", "")).lower().startswith("y")
                     validation_result["mob_suggestion"] = campaign_result.get("recommended_mob")
                     validation_result["message"] = campaign_result.get("rationale", validation_result.get("message"))
                     validation_result["suggested_hashtags"] = campaign_result.get("hashtags", [])
                     validation_result["connection_points"] = campaign_result.get("connection_points", [])
->>>>>>> main
+                if campaign_result:
+                    validation_result["is_valid"] = str(campaign_result.get("campaign_validation", "")).lower().startswith("y")
+                    validation_result["mob_suggestion"] = campaign_result.get("recommended_mob")
+                    validation_result["message"] = campaign_result.get("rationale", validation_result.get("message"))
+                    validation_result["suggested_hashtags"] = campaign_result.get("hashtags", [])
+                    validation_result["connection_points"] = campaign_result.get("connection_points", [])
 
                 if is_cheese_making or is_food_prep:
                     validation_result["message"] = (
