@@ -4,7 +4,7 @@ import sqlite3
 import logging
 import uuid
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import numpy as np
 
@@ -27,7 +27,7 @@ DEFAULT_ICONS = ["🥛", "🏃", "💃", "👨‍🍳", "😂", "🎨", "🔬", 
 class MilkMobClassifier:
     """Dynamic classifier that groups videos into Milk Mobs."""
 
-    def __init__(self, db_path: str = "milk_mobs.db", openai_api_key: str | None = None,
+    def __init__(self, db_path: str = "milk_mobs.db", openai_api_key: Optional[str] = None,
                  similarity_threshold: float = 0.6) -> None:
         self.db_path = db_path
         self.similarity_threshold = similarity_threshold
@@ -81,7 +81,7 @@ class MilkMobClassifier:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def classify_video(self, analysis_results: Dict[str, Any], metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    def classify_video(self, analysis_results: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Classify a video using its embedding. Create a new mob if necessary."""
         embedding = np.array(analysis_results.get("embedding", []), dtype=float)
         features = self._extract_features(analysis_results)
@@ -103,7 +103,7 @@ class MilkMobClassifier:
         mob_info = self._get_mob(best_id)
         if mob_info:
             self._store_video(best_id, analysis_results, metadata, embedding, best_score)
-        return mob_info | {"match_score": float(best_score)}
+        return {**mob_info, "match_score": float(best_score)}
 
     def get_all_mobs(self) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(self.db_path)
@@ -177,7 +177,7 @@ class MilkMobClassifier:
         finally:
             conn.close()
 
-    def _get_mob(self, mob_id: str) -> Dict[str, Any] | None:
+    def _get_mob(self, mob_id: str) -> Optional[Dict[str, Any]]:
         conn = sqlite3.connect(self.db_path)
         try:
             c = conn.cursor()
@@ -199,7 +199,7 @@ class MilkMobClassifier:
         finally:
             conn.close()
 
-    def _store_video(self, mob_id: str, analysis_results: Dict[str, Any], metadata: Dict[str, Any] | None,
+    def _store_video(self, mob_id: str, analysis_results: Dict[str, Any], metadata: Optional[Dict[str, Any]],
                       embedding: np.ndarray, score: float) -> None:
         conn = sqlite3.connect(self.db_path)
         try:
