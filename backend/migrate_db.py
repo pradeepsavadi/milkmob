@@ -60,6 +60,8 @@ def migrate(db_path="milk_mobs.db"):
             add_column(cursor, "mobs", "color_theme TEXT")
         if not column_exists(cursor, "mobs", "icon"):
             add_column(cursor, "mobs", "icon TEXT")
+        if not column_exists(cursor, "mobs", "centroid"):
+            add_column(cursor, "mobs", "centroid TEXT")
 
         # Videos table upgrades
         if not column_exists(cursor, "videos", "description"):
@@ -68,6 +70,8 @@ def migrate(db_path="milk_mobs.db"):
             add_column(cursor, "videos", "thumbnail_path TEXT")
         if not column_exists(cursor, "videos", "video_path"):
             add_column(cursor, "videos", "video_path TEXT")
+        if not column_exists(cursor, "videos", "embedding"):
+            add_column(cursor, "videos", "embedding TEXT")
 
         conn.commit()
         logger.info("Database migration completed")

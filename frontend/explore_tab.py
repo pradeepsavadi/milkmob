@@ -57,6 +57,17 @@ def explore_milk_mobs():
     
     # Get all mob data
     all_mobs = classifier.get_all_mobs()
+
+    # Enrich mobs with keywords and sample videos
+    for mob in all_mobs:
+        try:
+            mob['sample_keywords'] = classifier.get_mob_keywords(mob['mob_id'], limit=5)
+        except Exception:
+            mob['sample_keywords'] = []
+        try:
+            mob['sample_videos'] = classifier.get_mob_videos(mob['mob_id'], limit=3)
+        except Exception:
+            mob['sample_videos'] = []
     
     # Add search functionality
     search = st.text_input("🔍 Search for mobs or videos", placeholder="Enter keywords...")
@@ -73,7 +84,7 @@ def explore_milk_mobs():
             with col1 if i % 2 == 0 else col2:
                 # Check if search matches
                 if search and search.lower() not in mob['name'].lower() and search.lower() not in mob['description'].lower():
-                    if not any(search.lower() in kw.lower() for kw in mob['sample_keywords']):
+                    if not any(search.lower() in kw.lower() for kw in mob.get('sample_keywords', [])):
                         continue
                 
                 # Create styled expander with color theme
@@ -88,15 +99,15 @@ def explore_milk_mobs():
                     )
                     
                     # Show keywords
-                    if mob['sample_keywords']:
+                    if mob.get('sample_keywords'):
                         st.markdown("**Keywords:**")
-                        keyword_html = " ".join([f'<span style="background-color:{mob["color_theme"]}30; padding:3px 8px; border-radius:10px; margin-right:5px;">{kw}</span>' for kw in mob['sample_keywords']])
+                        keyword_html = " ".join([f'<span style="background-color:{mob["color_theme"]}30; padding:3px 8px; border-radius:10px; margin-right:5px;">{kw}</span>' for kw in mob.get('sample_keywords', [])])
                         st.markdown(f"<div style='margin-bottom:10px;'>{keyword_html}</div>", unsafe_allow_html=True)
                     
                     # Show videos if any
-                    if mob['sample_videos']:
+                    if mob.get('sample_videos'):
                         st.markdown("**Featured Videos:**")
-                        for j, video in enumerate(mob['sample_videos']):
+                        for j, video in enumerate(mob.get('sample_videos', [])):
                             # Check if search matches video title/description
                             if search and video.get('title') and search.lower() not in video['title'].lower():
                                 if not (video.get('description') and search.lower() in video['description'].lower()):
@@ -115,7 +126,7 @@ def explore_milk_mobs():
         for i, mob in enumerate(all_mobs):
             # Check if search matches
             if search and search.lower() not in mob['name'].lower() and search.lower() not in mob['description'].lower():
-                if not any(search.lower() in kw.lower() for kw in mob['sample_keywords']):
+                if not any(search.lower() in kw.lower() for kw in mob.get('sample_keywords', [])):
                     continue
             
             # Create styled header with color theme
@@ -131,19 +142,19 @@ def explore_milk_mobs():
             )
             
             # Keywords section
-            if mob['sample_keywords']:
+            if mob.get('sample_keywords'):
                 st.markdown("**Keywords:**")
-                keyword_html = " ".join([f'<span style="background-color:{mob["color_theme"]}30; padding:3px 8px; border-radius:10px; margin-right:5px;">{kw}</span>' for kw in mob['sample_keywords']])
+                keyword_html = " ".join([f'<span style="background-color:{mob["color_theme"]}30; padding:3px 8px; border-radius:10px; margin-right:5px;">{kw}</span>' for kw in mob.get('sample_keywords', [])])
                 st.markdown(f"<div style='margin-bottom:20px;'>{keyword_html}</div>", unsafe_allow_html=True)
             
             # Videos section
-            if mob['sample_videos']:
+            if mob.get('sample_videos'):
                 st.markdown("### Featured Videos")
                 
                 # Create columns for videos
-                cols = st.columns(min(3, len(mob['sample_videos'])))
+                cols = st.columns(min(3, len(mob.get('sample_videos', []))))
                 
-                for j, video in enumerate(mob['sample_videos']):
+                for j, video in enumerate(mob.get('sample_videos', [])):
                     # Check if search matches video title/description
                     if search and video.get('title') and search.lower() not in video['title'].lower():
                         if not (video.get('description') and search.lower() in video['description'].lower()):

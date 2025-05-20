@@ -152,6 +152,20 @@ class MilkMobClassifier:
         finally:
             conn.close()
 
+    def get_mob_keywords(self, mob_id: str, limit: int = 5) -> List[str]:
+        """Return top keywords for a given mob if stored in the database."""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            c = conn.cursor()
+            c.execute(
+                "SELECT keyword FROM mob_keywords WHERE mob_id=? ORDER BY weight DESC LIMIT ?",
+                (mob_id, limit),
+            )
+            rows = c.fetchall()
+            return [r[0] for r in rows]
+        finally:
+            conn.close()
+
     def get_mob_stats(self) -> Dict[str, Any]:
         conn = sqlite3.connect(self.db_path)
         try:
