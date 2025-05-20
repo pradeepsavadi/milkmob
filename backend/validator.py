@@ -46,7 +46,7 @@ class CampaignValidator:
             "dance", "jump", "flip", "trick", "stunt"
         ]
 
-    def _analyze_campaign_prompt(self, analysis: dict, metadata: dict | None):
+    def _analyze_campaign_prompt(self, analysis: dict, metadata: Optional[Dict[str, Any]] = None):
         """Use OpenAI with a detailed campaign prompt to analyze the video."""
         if not self._openai_client:
             return None
