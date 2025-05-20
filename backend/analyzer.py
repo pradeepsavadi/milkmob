@@ -232,8 +232,9 @@ class VideoAnalyzer:
             try:
                 milk_results_visual = self.client.search.query(
                     index_id=self.index_id,
-                    query="milk OR milk bottle OR milk carton OR glass of milk OR cheese OR dairy",
-                    video_ids=[video_id]
+                    options=["visual"],
+                    query_text="milk OR milk bottle OR milk carton OR glass of milk OR cheese OR dairy",
+                    filter={"video_ids": [video_id]},
                 )
             except Exception as e:
                 logger.warning(f"Error with visual search API: {str(e)}")
@@ -242,8 +243,9 @@ class VideoAnalyzer:
             try:
                 drinking_results = self.client.search.query(
                     index_id=self.index_id,
-                    query="person drinking OR pouring milk OR creative activity with milk OR cheese making",
-                    video_ids=[video_id]
+                    options=["visual"],
+                    query_text="person drinking OR pouring milk OR creative activity with milk OR cheese making",
+                    filter={"video_ids": [video_id]},
                 )
             except Exception as e:
                 logger.warning(f"Error with visual search API: {str(e)}")
@@ -252,8 +254,9 @@ class VideoAnalyzer:
             try:
                 milk_results_audio = self.client.search.query(
                     index_id=self.index_id,
-                    query="milk OR got milk OR drinking milk OR cheese OR dairy",
-                    video_ids=[video_id]
+                    options=["audio"],
+                    query_text="milk OR got milk OR drinking milk OR cheese OR dairy",
+                    filter={"video_ids": [video_id]},
                 )
             except Exception as e:
                 logger.warning(f"Error with audio search API: {str(e)}")
@@ -480,19 +483,16 @@ class VideoAnalyzer:
         """Find similar videos using updated API methods"""
         try:
             try:
-                similar_results = self.client.search.semantic(
-                    index_id=self.index_id,
-                    video_id=video_id,
-                    limit=5
-                )
-            except Exception as e:
-                logger.warning(f"Error with semantic search, trying fallback: {str(e)}")
                 similar_results = self.client.search.query(
                     index_id=self.index_id,
-                    query="milk OR dairy",
-                    video_ids=[],
-                    limit=5
+                    options=["visual", "audio"],
+                    query_text="milk OR dairy",
+                    page_limit=5,
+                    filter={"exclude_video_ids": [video_id]},
                 )
+            except Exception as e:
+                logger.warning(f"Error finding similar videos: {str(e)}")
+                return []
 
             similar_videos = []
             if hasattr(similar_results, 'data'):

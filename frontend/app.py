@@ -197,7 +197,6 @@ with tab1:
                     st.error("❌ Video validation failed")
                     st.write(results["validation"]["message"])
 
-                    st.write("Please ensure your video shows someone drinking milk creatively!")
 
                     if "is_cheese_making" in results["validation"] and results["validation"]["is_cheese_making"]:
                         chef_mob = next((m for m in classifier.get_all_mobs() if m["mob_id"] == "chef_milk_mob"), None)

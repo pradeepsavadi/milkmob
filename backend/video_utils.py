@@ -74,7 +74,7 @@ def extract_thumbnail(analysis_results, video_path, thumbnails_dir="thumbnails")
             # For demo purposes, we'll just use a placeholder
             create_placeholder_thumbnail(thumbnail_path)
             logger.info(f"Thumbnail created from storyboard at {thumbnail_path}")
-            return thumbnail_path
+            return os.path.abspath(thumbnail_path)
         except Exception as e:
             logger.warning(f"Failed to create thumbnail from storyboard: {str(e)}")
     
@@ -82,7 +82,7 @@ def extract_thumbnail(analysis_results, video_path, thumbnails_dir="thumbnails")
     try:
         create_placeholder_thumbnail(thumbnail_path)
         logger.info(f"Placeholder thumbnail created at {thumbnail_path}")
-        return thumbnail_path
+        return os.path.abspath(thumbnail_path)
     except Exception as e:
         logger.error(f"Error creating thumbnail: {str(e)}")
         return None
@@ -91,8 +91,13 @@ def create_placeholder_thumbnail(thumbnail_path):
     """Create a placeholder thumbnail image"""
     try:
         # Create a simple colored rectangle as placeholder
-        # In a real implementation, this would extract a frame from the video
         img = Image.new('RGB', (640, 360), color=(73, 109, 137))
+        try:
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(img)
+            draw.text((10, 10), "MilkMob", fill=(255, 255, 255))
+        except Exception:
+            pass
         img.save(thumbnail_path)
     except Exception as e:
         logger.error(f"Error creating placeholder thumbnail: {str(e)}")

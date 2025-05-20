@@ -6,6 +6,8 @@ import uuid
 import random
 from typing import List, Dict, Any, Optional
 
+import httpx
+
 import numpy as np
 
 try:
@@ -32,8 +34,14 @@ class MilkMobClassifier:
         self.db_path = db_path
         self.similarity_threshold = similarity_threshold
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        self._openai_client = None
         if self.openai_api_key and openai:
-            openai.api_key = self.openai_api_key
+            # Initialize a dedicated OpenAI client without using environment
+            # proxy settings to avoid compatibility issues with httpx
+            self._openai_client = openai.OpenAI(
+                api_key=self.openai_api_key,
+                http_client=httpx.Client(proxies=None),
+            )
         self._initialize_db()
 
     # ------------------------------------------------------------------
@@ -67,6 +75,7 @@ class MilkMobClassifier:
                     thumbnail_path TEXT,
                     video_path TEXT,
                     embedding TEXT,
+                    creativity_score REAL,
                     location TEXT,
                     match_score REAL,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -135,15 +144,13 @@ class MilkMobClassifier:
         finally:
             conn.close()
 
-    def get_mob_videos(self, mob_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_mob_videos(self, mob_id: str, limit: int = 10, sort_by_creativity: bool = False) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(self.db_path)
         try:
             c = conn.cursor()
-            c.execute(
-                """SELECT video_id, title, description, thumbnail_path, video_path, location, match_score
-                   FROM videos WHERE mob_id=? ORDER BY match_score DESC LIMIT ?""",
-                (mob_id, limit),
-            )
+            order = "creativity_score DESC" if sort_by_creativity else "match_score DESC"
+            query = f"SELECT video_id, title, description, thumbnail_path, video_path, location, match_score, creativity_score FROM videos WHERE mob_id=? ORDER BY {order} LIMIT ?"
+            c.execute(query, (mob_id, limit))
             rows = c.fetchall()
             return [
                 {
@@ -154,6 +161,7 @@ class MilkMobClassifier:
                     "video_path": r[4],
                     "location": r[5],
                     "match_score": r[6],
+                    "creativity_score": r[7],
                 }
                 for r in rows
             ]
@@ -278,12 +286,13 @@ class MilkMobClassifier:
             thumbnail = metadata.get("thumbnail_path") if metadata else None
             video_path = metadata.get("video_path") if metadata else None
             location = metadata.get("post_data", {}).get("location", {}).get("place_name") if metadata else None
+            creativity = analysis_results.get("creativity_score", 0.0)
 
             c.execute(
                 """INSERT OR REPLACE INTO videos
                        (video_id, mob_id, title, description, thumbnail_path, video_path,
-                        embedding, location, match_score)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        embedding, creativity_score, location, match_score)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     video_id,
                     mob_id,
@@ -292,6 +301,7 @@ class MilkMobClassifier:
                     thumbnail,
                     video_path,
                     json.dumps(embedding.tolist()),
+                    creativity,
                     location,
                     score,
                 ),
@@ -312,13 +322,13 @@ class MilkMobClassifier:
         mob_id = f"mob_{uuid.uuid4().hex[:8]}"
         name = f"Milk Mob {mob_id[-4:]}"
         description = "A community for unique milk moments."
-        if self.openai_api_key and openai:
+        if self._openai_client:
             try:
                 prompt = (
                     "Create a short name and description for a community of videos that share these features: "
                     + ", ".join(features[:10])
                 )
-                resp = openai.chat.completions.create(
+                resp = self._openai_client.chat.completions.create(
                     model="gpt-4",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.5,
