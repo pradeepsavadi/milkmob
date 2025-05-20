@@ -167,14 +167,52 @@ class MilkMobClassifier:
             conn.close()
 
     def get_mob_stats(self) -> Dict[str, Any]:
+        """Return basic statistics about stored mobs and videos."""
         conn = sqlite3.connect(self.db_path)
         try:
             c = conn.cursor()
+
+            # Total counts
             c.execute("SELECT COUNT(*) FROM videos")
             total_videos = c.fetchone()[0]
             c.execute("SELECT COUNT(*) FROM mobs")
             total_mobs = c.fetchone()[0]
-            return {"total_videos": total_videos, "total_mobs": total_mobs}
+
+            # Videos per mob
+            c.execute(
+                "SELECT name, video_count FROM mobs ORDER BY video_count DESC"
+            )
+            mob_counts = [[row[0], row[1]] for row in c.fetchall()]
+
+            # Geographic distribution
+            c.execute(
+                "SELECT COALESCE(location, 'Unknown') AS loc, COUNT(*) "
+                "FROM videos GROUP BY loc ORDER BY COUNT(*) DESC"
+            )
+            location_distribution = [[row[0], row[1]] for row in c.fetchall()]
+
+            # Top videos by match score
+            c.execute(
+                "SELECT v.title, m.name, v.match_score "
+                "FROM videos v JOIN mobs m ON v.mob_id = m.mob_id "
+                "ORDER BY v.match_score DESC LIMIT 5"
+            )
+            top_videos = [
+                {
+                    "title": row[0],
+                    "mob_name": row[1],
+                    "match_score": row[2],
+                }
+                for row in c.fetchall()
+            ]
+
+            return {
+                "total_videos": total_videos,
+                "total_mobs": total_mobs,
+                "mob_counts": mob_counts,
+                "location_distribution": location_distribution,
+                "top_videos": top_videos,
+            }
         finally:
             conn.close()
 
