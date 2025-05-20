@@ -40,7 +40,7 @@ class MilkMobClassifier:
             # proxy settings to avoid compatibility issues with httpx
             self._openai_client = openai.OpenAI(
                 api_key=self.openai_api_key,
-                http_client=httpx.Client(proxies=None),
+                http_client=httpx.Client(proxy=None, trust_env=False),
             )
         self._initialize_db()
 
