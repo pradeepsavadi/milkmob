@@ -150,11 +150,7 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
         validation_result = validator.validate_video(
             analysis_results["analysis_results"],
             tag_results,
-<<<<<<< HEAD
-            post_data
-=======
             post_data,
->>>>>>> main
         )
         
         # Step 4: Always classify, even if not valid
