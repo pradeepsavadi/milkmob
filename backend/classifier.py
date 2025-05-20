@@ -149,7 +149,11 @@ class MilkMobClassifier:
         try:
             c = conn.cursor()
             order = "creativity_score DESC" if sort_by_creativity else "match_score DESC"
-            query = f"SELECT video_id, title, description, thumbnail_path, video_path, location, match_score, creativity_score FROM videos WHERE mob_id=? ORDER BY {order} LIMIT ?"
+            query = (
+                "SELECT video_id, title, description, thumbnail_path, "
+                "video_path, location, match_score, creativity_score "
+                "FROM videos WHERE mob_id=? ORDER BY " + order + " LIMIT ?"
+            )
             c.execute(query, (mob_id, limit))
             rows = c.fetchall()
             return [
@@ -160,8 +164,9 @@ class MilkMobClassifier:
                     "thumbnail_path": r[3],
                     "video_path": r[4],
                     "location": r[5],
-                    "match_score": r[6],
-                    "creativity_score": r[7],
+                    # Default to 0.0 if scores are NULL
+                    "match_score": r[6] if r[6] is not None else 0.0,
+                    "creativity_score": r[7] if r[7] is not None else 0.0,
                 }
                 for r in rows
             ]
