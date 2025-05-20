@@ -1,13 +1,22 @@
 import logging
+import os
+import json
+import httpx
+from typing import Optional, Dict, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+try:  # pragma: no cover - openai may not be installed
+    import openai
+except Exception:  # pragma: no cover
+    openai = None
 
 class CampaignValidator:
     """
     Validates if a video meets the criteria for the Got Milk campaign using Twelve Labs API
     """
-    def __init__(self, analyzer=None):
+    def __init__(self, analyzer=None, openai_api_key=None):
         """
         Initialize the campaign validator with the VideoAnalyzer
         
@@ -15,6 +24,13 @@ class CampaignValidator:
         analyzer: VideoAnalyzer instance for additional API calls
         """
         self.analyzer = analyzer
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        self._openai_client = None
+        if self.openai_api_key and openai:
+            self._openai_client = openai.OpenAI(
+                api_key=self.openai_api_key,
+                http_client=httpx.Client(proxy=None, trust_env=False),
+            )
         
         # Define key terms for validation
         self.milk_terms = [
@@ -29,6 +45,106 @@ class CampaignValidator:
             "creative", "unique", "interesting", "unusual", "artistic",
             "dance", "jump", "flip", "trick", "stunt"
         ]
+
+    def _analyze_campaign_prompt(self, analysis: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """Use GPT-4 to determine campaign relevance and mob suggestions."""
+        if not self._openai_client:
+            return None
+
+        meta_lines = []
+        if metadata:
+            caption = metadata.get("caption", "")
+            hashtags = metadata.get("hashtags", [])
+            if isinstance(hashtags, list):
+                hashtags = " ".join(hashtags)
+            meta_lines.append(f"caption: {caption}")
+            if hashtags:
+                meta_lines.append(f"hashtags: {hashtags}")
+            if metadata.get("location"):
+                meta_lines.append(f"location: {metadata['location']}")
+            if metadata.get("user_id"):
+                meta_lines.append(f"user: {metadata['user_id']}")
+        video_data = analysis.get("video_data", {})
+        if video_data:
+            if video_data.get("name"):
+                meta_lines.append(f"title: {video_data['name']}")
+            if video_data.get("duration") is not None:
+                meta_lines.append(f"duration: {video_data['duration']}")
+
+        video_metadata = "\n".join(meta_lines)
+
+        summary = analysis.get("summary") or analysis.get("description", "")
+        actions = ", ".join(analysis.get("actions", []))
+        objects = ", ".join(analysis.get("objects", []))
+        location = metadata.get("location") if metadata else None
+
+        prompt = (
+            "You are an AI assistant for a social media platform's viral marketing campaign called \"Got Milk Mob.\"\n"
+            "Your task is to analyze video content and categorize it into appropriate \"Milk Mobs\" based on the following information extracted by Twelve Labs:\n"
+            f"VIDEO METADATA:\n{video_metadata}\n"
+            f"VIDEO CONTENT SUMMARY:\n{summary}\n"
+            f"KEY ACTIONS DETECTED:\n{actions}\n"
+            f"OBJECTS IDENTIFIED:\n{objects}\n"
+            f"SETTING/LOCATION:\n{location if location else 'Unknown'}\n"
+            "INSTRUCTIONS:\n"
+            "1. Verify this video is genuinely part of the \"Got Milk\" campaign by confirming:\n"
+            "   - Presence of milk consumption or milk container\n"
+            "   - Person performing a creative/unique activity while drinking milk\n"
+            "   - Overall alignment with campaign theme\n"
+            "2. If validated, categorize this video into one of the following \"Milk Mobs\" or suggest a new one:\n"
+            "   - Sports Milk Mob (athletic activities)\n"
+            "   - Dance Milk Mob (dancing/movement-based activities)\n"
+            "   - Stunt Milk Mob (impressive tricks/stunts)\n"
+            "   - Comedy Milk Mob (funny/humorous content)\n"
+            "   - Challenge Milk Mob (completing specific challenges)\n"
+            "3. Provide a brief rationale (2-3 sentences) for your categorization.\n"
+            "4. Generate 3-5 relevant hashtags that could be suggested to the user beyond #gotmilk and #milkmob.\n"
+            "5. Identify 2-3 distinctive elements that could connect this video with others in the same \"Milk Mob.\"\n"
+            "OUTPUT FORMAT:\n"
+            "- Campaign Validation: [Yes/No]\n"
+            "- Recommended Milk Mob: [Category]\n"
+            "- Rationale: [Brief explanation]\n"
+            "- Suggested Additional Hashtags: [List]\n"
+            "- Connection Points: [List]"
+        )
+
+        try:
+            resp = self._openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+            )
+            content = resp.choices[0].message.content
+            return json.loads(content)
+        except Exception as e:  # pragma: no cover - network not available
+            logger.warning("OpenAI campaign prompt failed: %s", e)
+            return None
+
+    def _analyze_with_llm(self, milk_text: str, creativity_text: str):
+        """Use OpenAI to interpret the analysis text and return structured flags."""
+        if not self._openai_client:
+            return None
+        prompt = (
+            "Given the following analysis from the Twelve Labs API about a video, "
+            "decide if the video clearly shows milk, if someone is drinking it, "
+            "and whether it depicts food preparation or cheese making. "
+            "Also provide a creativity score between 0 and 1.\n"
+            f"Milk analysis: {milk_text}\n"
+            f"Creativity analysis: {creativity_text}\n"
+            "Respond in JSON with keys has_milk, is_drinking, is_food_prep, "
+            "is_cheese_making, creativity_score, message."
+        )
+        try:
+            resp = self._openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+            )
+            content = resp.choices[0].message.content
+            return json.loads(content)
+        except Exception as e:  # pragma: no cover - network not available
+            logger.warning("OpenAI classification failed: %s", e)
+            return None
 
     def _detect_presence_in_text(self, text, subject):
         """Better detection of subject presence in text with negation handling"""
@@ -122,7 +238,8 @@ class CampaignValidator:
         ]
         return any(phrase in text_lower for phrase in food_prep_phrases)
     
-    def validate_video(self, analysis_results, tag_results=None):
+    def validate_video(self, analysis_results: Dict[str, Any], tag_results: Optional[Dict[str, Any]] = None,
+                       metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Validate if video meets campaign criteria using Twelve Labs API capabilities
         
@@ -154,13 +271,21 @@ class CampaignValidator:
                 milk_response = milk_text.data if hasattr(milk_text, 'data') else ""
                 creativity_response = creativity_text.data if hasattr(creativity_text, 'data') else ""
 
-                has_milk = self._detect_presence_in_text(milk_response, "milk")
-                is_drinking = self._detect_drinking_in_text(milk_response)
-                is_food_prep = self._detect_food_preparation(milk_response) or self._detect_food_preparation(creativity_response)
-                is_cheese_making = "cheese" in milk_response.lower() or "cheese-making" in milk_response.lower() or "cheese making" in milk_response.lower()
+                llm_result = self._analyze_with_llm(milk_response, creativity_response)
+                if llm_result:
+                    has_milk = llm_result.get("has_milk", False)
+                    is_drinking = llm_result.get("is_drinking", False)
+                    is_food_prep = llm_result.get("is_food_prep", False)
+                    is_cheese_making = llm_result.get("is_cheese_making", False)
+                    creativity_confidence = llm_result.get("creativity_score", 0.0)
+                else:
+                    has_milk = self._detect_presence_in_text(milk_response, "milk")
+                    is_drinking = self._detect_drinking_in_text(milk_response)
+                    is_food_prep = self._detect_food_preparation(milk_response) or self._detect_food_preparation(creativity_response)
+                    is_cheese_making = "cheese" in milk_response.lower() or "cheese-making" in milk_response.lower() or "cheese making" in milk_response.lower()
+                    creativity_confidence = self._extract_creativity_score(creativity_response) / 10.0
 
                 milk_confidence = self._extract_confidence_from_text(milk_response, "milk") if has_milk else 0.3
-                creativity_confidence = self._extract_creativity_score(creativity_response) / 10.0
 
                 tag_boost = 0.0
                 if tag_results and tag_results.get("is_campaign_tagged", False):
@@ -181,7 +306,7 @@ class CampaignValidator:
                     "creativity_confidence": creativity_confidence,
                     "audio_confidence": analysis_results.get("audio_confidence", 0.0),
                     "overall_confidence": (milk_confidence + (0.7 if is_drinking else 0.3)) / 2.0,
-                    "message": None,
+                    "message": llm_result.get("message") if llm_result else None,
                     "mob_suggestion": None,
                     "api_responses": {
                         "milk_question": milk_response,
@@ -189,18 +314,27 @@ class CampaignValidator:
                     },
                 }
 
+                campaign_prompt = self._analyze_campaign_prompt(analysis_results, metadata)
+                if campaign_prompt:
+                    validation_result["campaign_prompt"] = campaign_prompt
+                    if not validation_result.get("mob_suggestion") and campaign_prompt.get("Recommended Milk Mob"):
+                        validation_result["mob_suggestion"] = campaign_prompt.get("Recommended Milk Mob")
+
                 if is_cheese_making or is_food_prep:
-                    validation_result["message"] = "Your video shows cheese-making or food preparation, which is a creative use of milk, but it doesn't show milk drinking as required for the campaign."
+                    validation_result["message"] = (
+                        "Your video shows cheese-making or food preparation, which is a creative use of milk, but it doesn't show milk drinking as required for the campaign."
+                    )
                     validation_result["mob_suggestion"] = "chef_milk_mob"
                 else:
-                    validation_result["message"] = self._generate_validation_message(
-                        is_valid,
-                        has_milk,
-                        is_drinking,
-                        creativity_confidence >= 0.5,
-                        False,
-                        tag_results,
-                    )
+                    if not validation_result["message"]:
+                        validation_result["message"] = self._generate_validation_message(
+                            is_valid,
+                            has_milk,
+                            is_drinking,
+                            creativity_confidence >= 0.5,
+                            False,
+                            tag_results,
+                        )
                     if is_valid:
                         validation_result["mob_suggestion"] = "active_milk_mob"
 

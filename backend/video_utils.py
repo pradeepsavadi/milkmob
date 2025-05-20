@@ -148,8 +148,9 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
         
         # Step 3: Validate against campaign criteria
         validation_result = validator.validate_video(
-            analysis_results["analysis_results"], 
-            tag_results
+            analysis_results["analysis_results"],
+            tag_results,
+            post_data
         )
         
         # Step 4: Always classify, even if not valid
