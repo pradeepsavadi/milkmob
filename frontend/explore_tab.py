@@ -39,10 +39,11 @@ def render_video_card(video, key_prefix):
             st.markdown(f"📍 {video['location']}")
         
         # Display match score
-        score = video.get('match_score', 0.5)
+        score = video.get('match_score', 0.5) or 0.0
         st.progress(score, text=f"Match: {score:.0%}")
         if 'creativity_score' in video:
-            cscore = video.get('creativity_score', 0.0)
+            cscore = video.get('creativity_score')
+            cscore = cscore if cscore is not None else 0.0
             st.progress(cscore, text=f"Creativity: {cscore:.0%}")
         
         # Video player button
