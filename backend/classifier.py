@@ -90,7 +90,15 @@ class MilkMobClassifier:
         best_id = None
         best_score = -1.0
         for mob in mobs:
-            centroid = np.array(json.loads(mob["centroid"]), dtype=float)
+            centroid_data = mob.get("centroid")
+            if not centroid_data:
+                logger.warning("Mob %s missing centroid - skipping", mob.get("mob_id"))
+                continue
+            try:
+                centroid = np.array(json.loads(centroid_data), dtype=float)
+            except Exception as e:
+                logger.warning("Could not parse centroid for mob %s: %s", mob.get("mob_id"), e)
+                continue
             score = self._cosine_similarity(embedding, centroid)
             if score > best_score:
                 best_score = score
@@ -223,9 +231,17 @@ class MilkMobClassifier:
         conn = sqlite3.connect(self.db_path)
         try:
             c = conn.cursor()
-            c.execute("SELECT mob_id, centroid FROM mobs")
+            try:
+                c.execute(
+                    "SELECT mob_id, centroid FROM mobs WHERE centroid IS NOT NULL"
+                )
+            except sqlite3.OperationalError:
+                # Older database without centroid column
+                c.execute("SELECT mob_id, NULL as centroid FROM mobs")
             rows = c.fetchall()
-            return [{"mob_id": r[0], "centroid": r[1]} for r in rows]
+            return [
+                {"mob_id": r[0], "centroid": r[1]} for r in rows if r[1] is not None
+            ]
         finally:
             conn.close()
 
