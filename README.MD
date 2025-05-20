@@ -9,6 +9,8 @@ MilkMob is a prototype social media tool that automatically validates and catego
 - [Installation](#installation)
 - [Running the App](#running-the-app)
 - [How It Works](#how-it-works)
+- [Detailed Code Flow](#detailed-code-flow)
+- [System Architecture](#system-architecture)
 - [Key Components](#key-components)
 - [Example Usage](#example-usage)
 - [API Usage Notes](#api-usage-notes)
@@ -23,17 +25,22 @@ This solution enables a social media platform to automatically validate user-sub
 - Find similar videos within each mob
 
 ## Project Structure
-```
-backend/    # Core business logic and API integrations
-frontend/   # Streamlit app for interacting with the system
-requirements.txt
-milk_mobs.db  # SQLite database (created automatically)
-```
-Major backend modules include:
-- **VideoAnalyzer** (`backend/analyzer.py`) – Interfaces with Twelve Labs APIs
-- **CampaignValidator** (`backend/validator.py`) – Validates that a video fits campaign criteria
-- **MilkMobClassifier** (`backend/classifier.py`) – Groups validated videos into themed mobs
-- **CampaignTagDetector** (`backend/tag_detector.py`) – Detects campaign hashtags
+backend/     # Core business logic and API integrations
+├── __init__.py          # Exports main components
+├── analyzer.py          # VideoAnalyzer - Twelve Labs SDK integration
+├── validator.py         # CampaignValidator - Campaign criteria checking
+├── classifier.py        # MilkMobClassifier - Video grouping and database ops
+├── tag_detector.py      # CampaignTagDetector - Hashtag recognition
+├── video_utils.py       # Video processing utilities
+└── migrate_db.py        # Database migration tool
+
+frontend/    # Streamlit UI components
+├── app.py               # Main application with three tabs
+└── explore_tab.py       # Enhanced Milk Mobs exploration interface
+
+videos/      # Storage for uploaded videos (created on first use)
+thumbnails/  # Storage for video thumbnails (created on first use)
+milk_mobs.db # SQLite database for mobs and videos (created automatically)
 
 ## Prerequisites
 - Python 3.9 or newer
@@ -74,6 +81,94 @@ The UI provides tabs for uploading videos, exploring mobs, and viewing dashboard
 4. **Mob Classification** – Valid content is organized into a themed Milk Mob.
 5. **Content Exploration** – Users browse their mob and discover similar videos.
 
+## Detailed Code Flow
+
+### Video Upload and Processing Flow
+1. User uploads a video through the Streamlit interface in `frontend/app.py`
+2. The uploaded file is saved to disk using `save_uploaded_video()` from `backend/video_utils.py`
+3. Post metadata (caption, hashtags, location) is collected from the user interface
+4. The `process_video_post()` function orchestrates the entire processing pipeline:
+
+   a. **Campaign Tag Detection**:
+      - `CampaignTagDetector.detect_tags()` identifies hashtags like #gotmilk, #milkmob
+      - Tag confidence score is calculated based on number of matching tags
+
+   b. **Video Analysis with Twelve Labs**:
+      - `VideoAnalyzer.upload_and_analyze_video()` uploads the video to Twelve Labs
+      - API tasks are created and tracked until completion
+      - Comprehensive analysis performed via multiple API calls:
+        - Visual search for milk-related objects and drinking activities
+        - Audio search for milk-related mentions
+        - Summary and highlight generation
+        - Creative assessment and scoring
+        - Optional caption and storyboard generation
+      - Additional AI gist (title, topics, hashtags) generated using `generate_video_gist()`
+
+   c. **Campaign Validation**:
+      - `CampaignValidator.validate_video()` validates if video meets campaign criteria
+      - Uses both rule-based validation and optional AI-assisted validation with OpenAI
+      - Checks for milk presence, drinking activity, and creative elements
+      - Assesses if video shows milk drinking vs. food preparation
+
+   d. **Milk Mob Classification**:
+      - `MilkMobClassifier.classify_video()` assigns video to a thematic "Milk Mob"
+      - Uses content embeddings to find similar videos and matching mobs
+      - Creates new mobs with AI-generated names/descriptions when needed
+      - Stores video metadata, embeddings, and mob assignments in SQLite database
+
+   e. **Similar Content Detection**:
+      - `VideoAnalyzer.find_similar_videos()` identifies similar videos in the database
+      - Returns a list of related content to show the user
+
+5. Results are displayed in the Streamlit UI:
+   - Validation status (success/failure)
+   - Mob assignment with thematic colors and icons
+   - Similar videos within the assigned mob
+   - AI-generated content suggestions
+   - Technical details of the analysis
+
+### Database Interactions
+- `MilkMobClassifier` manages all database operations:
+  - Stores video metadata, embeddings, and mob assignments
+  - Retrieves mob information and video lists
+  - Updates mob centroids as new videos are added
+  - Tracks video counts and creativity scores
+
+### Explore and Dashboard Features
+- The "Explore Milk Mobs" tab in `frontend/explore_tab.py` displays:
+  - All available mobs with their videos and keywords
+  - Search functionality to find specific mobs or videos
+  - Options to view mobs in compact or detailed mode
+- The "Dashboard" tab visualizes campaign analytics:
+  - Mob popularity metrics
+  - Geographic distribution of content
+  - Top creative videos
+  - Campaign growth over time
+
+## System Architecture
+
+```mermaid
+graph TD
+    A[User uploads video] --> B[Frontend/app.py]
+    B --> C[save_uploaded_video]
+    C --> D[process_video_post]
+    D --> E[CampaignTagDetector]
+    D --> F[VideoAnalyzer]
+    F --> G[Twelve Labs API]
+    G --> F
+    F --> H[extract_thumbnail]
+    D --> I[CampaignValidator]
+    I --> F
+    I --> J{Validation}
+    D --> K[MilkMobClassifier]
+    K --> L[(SQLite Database)]
+    J -->|Valid| M[Display success]
+    J -->|Invalid| N[Display error]
+    M --> O[Show mob assignment]
+    O --> P[Show similar videos]
+    O --> Q[Show AI suggestions]
+```
+
 ## Key Components
 - **VideoAnalyzer** – Uploads and analyzes videos with Twelve Labs.
 - **CampaignValidator** – Checks that videos meet required criteria.
@@ -94,16 +189,33 @@ The UI provides tabs for uploading videos, exploring mobs, and viewing dashboard
 3. Join a mob to participate and share similar content.
 
 ## API Usage Notes
-The app leverages several Twelve Labs API endpoints:
+The app leverages several Twelve Labs API endpoints through the SDK:
+
+### Core API Endpoints
 - `task.create` – Upload and index videos
 - `search.query` – Find milk-related visual or audio content
-- `generate.summarize` – Produce video summaries
-- `generate.text` – Assess creativity semantically
-- `search.vector` – Locate similar videos with embeddings
+- `generate.summarize` – Produce video summaries and highlights
+- `generate.text` – Generate semantic analysis and creative assessment
+- `search.vector` – Locate similar videos using embeddings
+- `generate.gist` – Generate title, topics, and hashtags for videos
 - `generate.caption` *(optional)* – Generate short captions
 - `generate.storyboard` *(optional)* – Retrieve storyboard frames
 
-When optional endpoints are enabled, the Streamlit app shows the generated caption and storyboard inside the **Twelve Labs API Analysis** section.
+### Key Integration Points
+- **VideoAnalyzer** class (`backend/analyzer.py`) manages all API interactions:
+  - Ensures proper index creation with required models
+  - Uploads videos and tracks indexing progress
+  - Performs multi-modal analysis (visual, audio)
+  - Generates creative assessments with scoring
+  - Retrieves video embeddings for similarity matching
+
+- **CampaignValidator** class uses Twelve Labs responses to verify:
+  - Presence of milk in the video (visual detection)
+  - Drinking activities (action recognition)
+  - Creative elements (semantic analysis)
+  - Audio mentions of milk-related terms
+
+The API responses power the Milk Mob classification system, which groups videos using embedding similarity, and the campaign validation system, which ensures content meets campaign requirements.
 
 ## Dependencies
 - `streamlit` – Web app framework
