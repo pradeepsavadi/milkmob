@@ -83,6 +83,40 @@ class MilkMobClassifier:
                 )
                 """
             )
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS video_gist(
+                    video_id TEXT PRIMARY KEY,
+                    title TEXT,
+                    topics TEXT,
+                    hashtags TEXT,
+                    FOREIGN KEY(video_id) REFERENCES videos(video_id)
+                )
+                """
+            )
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_video_gist_title ON video_gist(title)"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _store_video_gist(self, video_id: str, gist_data: Dict[str, Any]) -> None:
+        """Store gist data for a video"""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            c = conn.cursor()
+            c.execute(
+                """INSERT OR REPLACE INTO video_gist
+                       (video_id, title, topics, hashtags)
+                       VALUES (?, ?, ?, ?)""",
+                (
+                    video_id,
+                    gist_data.get("title"),
+                    json.dumps(gist_data.get("topics", [])),
+                    json.dumps(gist_data.get("hashtags", [])),
+                ),
+            )
             conn.commit()
         finally:
             conn.close()
@@ -311,6 +345,11 @@ class MilkMobClassifier:
                     score,
                 ),
             )
+
+            # Store gist data if available
+            gist = analysis_results.get("gist")
+            if gist:
+                self._store_video_gist(video_id, gist)
             c.execute("SELECT centroid, video_count FROM mobs WHERE mob_id=?", (mob_id,))
             cent, count = c.fetchone()
             old_centroid = np.array(json.loads(cent), dtype=float)
@@ -373,6 +412,12 @@ class MilkMobClassifier:
         for key in ("objects", "actions"):
             if key in analysis_results:
                 features.extend([str(x).lower() for x in analysis_results[key]])
+        if "gist" in analysis_results:
+            gist = analysis_results["gist"]
+            if gist.get("topics"):
+                features.extend([f"topic:{t.lower()}" for t in gist["topics"]])
+            if gist.get("hashtags"):
+                features.extend([h.lower().replace("#", "") for h in gist["hashtags"]])
         for key in ("description", "semantic_analysis"):
             if key in analysis_results and isinstance(analysis_results[key], str):
                 features.extend(self._extract_keywords(analysis_results[key]))

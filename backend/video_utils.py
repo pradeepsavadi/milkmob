@@ -132,6 +132,17 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
         
         # Step 2: Analyze video with Twelve Labs
         analysis_results = analyzer.upload_and_analyze_video(video_path)
+
+        # Generate AI gist (title, topics, hashtags)
+        gist_results = analyzer.generate_video_gist(analysis_results["video_id"])
+        analysis_results["gist"] = gist_results
+
+        # Apply suggested title and hashtags if not provided
+        if gist_results.get("title") and not post_data.get("caption"):
+            post_data["caption"] = gist_results.get("title")
+        if gist_results.get("hashtags"):
+            post_data.setdefault("hashtags", [])
+            post_data["hashtags"].extend(gist_results.get("hashtags"))
         
         # Extract thumbnail
         thumbnail_path = extract_thumbnail(analysis_results, video_path)
@@ -182,7 +193,8 @@ def process_video_post(video_path, post_data, analyzer, validator, classifier, t
             "processing_time": processing_time,
             "caption": caption,
             "storyboard": storyboard,
-            "thumbnail_path": thumbnail_path
+            "thumbnail_path": thumbnail_path,
+            "gist": gist_results
         }
         
     except Exception as e:

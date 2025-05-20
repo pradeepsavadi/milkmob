@@ -155,12 +155,42 @@ with tab1:
                     # Display location info if available
                     if "location" in results and results["location"]:
                         st.write(f"📍 Location: {results['location']['place_name']}, {results['location']['city']}")
-                        
+
                         # Show nearby mobs if available
                         if "nearby_mobs" in mob and mob["nearby_mobs"]:
                             st.subheader("Nearby Milk Mobs:")
                             for nearby_mob in mob["nearby_mobs"]:
                                 st.write(f"- {nearby_mob['name']} ({nearby_mob['video_count']} videos in {nearby_mob['location']})")
+
+                    # Show AI gist suggestions
+                    if "gist" in results:
+                        st.markdown("## AI Content Suggestions")
+                        if results["gist"].get("title"):
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.markdown("### Suggested Title")
+                                st.markdown(f"**{results['gist']['title']}**")
+                            with col2:
+                                if st.button("Use This Title"):
+                                    st.success("Title updated!")
+                        if results["gist"].get("topics"):
+                            st.markdown("### Key Topics")
+                            topics_html = " ".join([
+                                f'<span style="background-color:#4CAF5030; padding:5px 10px; border-radius:15px; margin-right:8px; margin-bottom:8px; display:inline-block;">{t}</span>'
+                                for t in results["gist"]["topics"]
+                            ])
+                            st.markdown(f"<div style='margin-bottom:15px;'>{topics_html}</div>", unsafe_allow_html=True)
+                        if results["gist"].get("hashtags"):
+                            st.markdown("### Suggested Hashtags")
+                            hashtag_html = " ".join([
+                                f'<span style="background-color:#2196F330; padding:5px 10px; border-radius:15px; margin-right:8px; margin-bottom:8px; display:inline-block;">{tag}</span>'
+                                for tag in results["gist"]["hashtags"]
+                            ])
+                            st.markdown(f"<div style='margin-bottom:15px;'>{hashtag_html}</div>", unsafe_allow_html=True)
+                            hashtags_text = " ".join(results["gist"]["hashtags"])
+                            if st.button("Copy All Hashtags"):
+                                st.code(hashtags_text)
+                                st.success("Hashtags copied to clipboard!")
                     
                      # Display API responses
                     if ("api_responses" in results["validation"]) or results.get("caption") or results.get("storyboard"):

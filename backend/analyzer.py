@@ -479,6 +479,25 @@ class VideoAnalyzer:
             logger.error(f"Error assessing creativity: {str(e)}")
             return 0.5
 
+    def generate_video_gist(self, video_id):
+        """Generate title, topics, and hashtags for a video"""
+        try:
+            logger.info(f"Generating gist for video: {video_id}")
+            response = self.client.generate.gist(
+                video_id=video_id,
+                types=["title", "topic", "hashtag"],
+            )
+            result = {
+                "title": getattr(response, "title", None),
+                "topics": getattr(response, "topics", []),
+                "hashtags": getattr(response, "hashtags", []),
+            }
+            logger.info(f"Generated gist: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Error generating video gist: {str(e)}")
+            return {"title": None, "topics": [], "hashtags": []}
+
     def find_similar_videos(self, video_id):
         """Find similar videos using updated API methods"""
         try:
